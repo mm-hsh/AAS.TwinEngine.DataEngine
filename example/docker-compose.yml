@@ -2,6 +2,9 @@ networks:
   twinengine-network:
     name: twinengine-network
 
+volumes:
+  postgres-data:
+
 services:
   nginx:
     image: nginx:trixie-perl
@@ -23,7 +26,7 @@ services:
       - twinengine-network
 
   twinengine-dataengine:
-    image: ghcr.io/aas-twinengine/dataengine:v1.0.0
+    image: ghcr.io/aas-twinengine/dataengine:1.0.0
     container_name: twinengine-dataengine
     depends_on:
       dpp-plugin:
@@ -35,18 +38,20 @@ services:
       - Plugins__Instances__0__Name=RelationalDatabasePlugin
       - Plugins__Instances__0__baseUrl=http://dpp-plugin:8080
       - Plugins__Instances__0__healthEndpoint=/healthz
+      - Plugins__MultiLanguageProperty__DefaultLanguages__0=en
+      - Plugins__MultiLanguageProperty__DefaultLanguages__1=de
       - Plugins__Instances__0__headerMappings__0__source=Authorization
       - Plugins__Instances__0__headerMappings__0__target=X-Auth-Token
       - Plugins__Instances__0__headerMappings__0__required=false
       - Plugins__Instances__0__headerMappings__1__source=X-Organization-Id
       - Plugins__Instances__0__headerMappings__1__target=X-Tenant-Context
       - Plugins__Instances__0__headerMappings__1__required=false
-      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__0__templateId=https://admin-shell.io/ZVEI/TechnicalData/Submodel/1/2
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__0__templateId=https://admin-shell.io/idta/SubmodelTemplate/TechnicalData/2/0
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__0__pattern__0=TechnicalData
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__1__templateId=https://admin-shell.io/idta/SubmodelTemplate/DigitalNameplate/3/0
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__1__pattern__0=Nameplate
-      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__templateId=https://admin-shell.io/idta/SubmodelTemplate/ContactInformation/1/0
-      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__pattern__0=ContactInformation
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__templateId=https://admin-shell.io/idta/SubmodelTemplate/MaintenanceInstructions/1/0
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__pattern__0=MaintenanceInstructions
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__3__templateId=https://admin-shell.io/idta/SubmodelTemplate/CarbonFootprint/1/0
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__3__pattern__0=CarbonFootprint
       - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__4__templateId=https://admin-shell.io/idta/SubmodelTemplate/HandoverDocumentation/2/0
@@ -90,7 +95,7 @@ services:
       - twinengine-network
 
   dpp-plugin:
-    image: ghcr.io/aas-twinengine/plugindpp:v1.0.0
+    image: ghcr.io/aas-twinengine/plugindpp:1.0.0
     container_name: dpp-plugin
     depends_on:
       postgres:
@@ -105,9 +110,9 @@ services:
       - ExtractionRules__SubmodelNameExtractionRules__0__SubmodelName=NamePlate
       - ExtractionRules__SubmodelNameExtractionRules__0__pattern__0=Nameplate
       - ExtractionRules__SubmodelNameExtractionRules__0__pattern__1=NamePlate
-      - ExtractionRules__SubmodelNameExtractionRules__1__SubmodelName=ContactInformation
-      - ExtractionRules__SubmodelNameExtractionRules__1__pattern__0=ContactInformation
-      - ExtractionRules__SubmodelNameExtractionRules__1__pattern__1=ContactInformations
+      - ExtractionRules__SubmodelNameExtractionRules__1__SubmodelName=MaintenanceInstructions
+      - ExtractionRules__SubmodelNameExtractionRules__1__pattern__0=MaintenanceInstructions
+      - ExtractionRules__SubmodelNameExtractionRules__1__pattern__1=MaintenanceInstruction
       - ExtractionRules__SubmodelNameExtractionRules__2__SubmodelName=HandoverDocumentation
       - ExtractionRules__SubmodelNameExtractionRules__2__pattern__0=HandoverDocumentation
       - ExtractionRules__SubmodelNameExtractionRules__2__pattern__1=HandoverDocumentations
@@ -202,6 +207,7 @@ services:
       POSTGRES_PASSWORD: admin
     volumes:
       - ./postgres:/docker-entrypoint-initdb.d
+      - postgres-data:/var/lib/postgresql/data
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d twinengine"]
