@@ -153,7 +153,7 @@ In production, hosting and managing the PostgreSQL database is the customer's re
 
 **Port conflicts:** `netstat -ano | findstr :8080` (Windows) to find conflicts. Change ports in `docker-compose.yml`.
 
-**Startup issues:** Run `docker compose pull` followed by `docker compose up -d --force-recreate`
+**Startup issues:** Run `docker compose pull`
 
 **Database errors:** Check `docker compose ps` for health status. Verify connection strings match credentials.
 

@@ -16,7 +16,7 @@ services:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template
     restart: always
     depends_on:
-      template-repository:
+      template-repository-registry:
         condition: service_started
     networks:
       - dataengine-network
@@ -57,31 +57,31 @@ services:
       - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Pattern=/
       - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Index=5
       - TemplateManagement__AasTemplateRepository__Name=AasTemplateRepository
-      - TemplateManagement__AasTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__AasTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__AasTemplateRepository__healthEndpoint=/health
       - TemplateManagement__AasTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__AasTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__AasTemplateRepository__headerMappings__0__required=false
       - TemplateManagement__SubmodelTemplateRepository__Name=SubmodelTemplateRepository
-      - TemplateManagement__SubmodelTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__SubmodelTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__SubmodelTemplateRepository__healthEndpoint=/health
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__required=false
       - TemplateManagement__ConceptDescriptionTemplateRepository__Name=ConceptDescriptionTemplateRepository
-      - TemplateManagement__ConceptDescriptionTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__ConceptDescriptionTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__ConceptDescriptionTemplateRepository__healthEndpoint=/health
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__required=false
       - TemplateManagement__AasTemplateRegistry__Name=AasTemplateRegistry
-      - TemplateManagement__AasTemplateRegistry__baseUrl=http://template-repository:8082
+      - TemplateManagement__AasTemplateRegistry__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__AasTemplateRegistry__healthEndpoint=/health
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__source=Authorization
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__target=Authorization
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__required=false
       - TemplateManagement__SubmodelTemplateRegistry__Name=SubmodelTemplateRegistry
-      - TemplateManagement__SubmodelTemplateRegistry__baseUrl=http://template-repository:8082
+      - TemplateManagement__SubmodelTemplateRegistry__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__SubmodelTemplateRegistry__healthEndpoint=/health
       - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__source=Authorization
       - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__target=Authorization
@@ -110,9 +110,9 @@ services:
     networks:
       - dataengine-network
 
-  template-repository:
+  template-repository-registry:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
-    container_name: template-repository
+    container_name: template-repository-registry
     ports:
       - "8082:8082"
     command: ["/app/aasenvironmentservice"]
@@ -181,13 +181,13 @@ services:
       PRIMARY_LIGHT_COLOR: "#041b2b"
     restart: always
     depends_on:
-      template-repository:
+      template-repository-registry:
         condition: service_started
     networks:
       - dataengine-network
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18
     container_name: postgres
     environment:
       POSTGRES_DB: twinengine

@@ -3,13 +3,11 @@
 ## Overview
 This project provides a basic setup to demonstrate how **TwinEngine** can be integrated and run locally. It provides a complete environment for managing Asset Administration Shells (AAS) and related components.
 
-The example now uses the **BaSyx Go** environment with Postgres-backed storage instead of the older Java and Mongo-based stack.
-
 This example includes three submodels:
 
-- Nameplate
+- CustomSubmodel
 - ContactInformation
-- Reliability
+- HandoverDocumentation
 ---
 
 ## Default configuration

@@ -22,9 +22,8 @@ services:
       - twinengine-network
 
   twinengine-dataengine:
-    image: ghcr.io/aas-twinengine/dataengine:develop
+    image: ghcr.io/aas-twinengine/dataengine:1.0.0
     container_name: twinengine-dataengine
-    pull_policy: always
     depends_on:
       dpp-plugin:
         condition: service_started
@@ -77,9 +76,8 @@ services:
       - twinengine-network
 
   dpp-plugin:
-    image: ghcr.io/aas-twinengine/plugindpp:develop
+    image: ghcr.io/aas-twinengine/plugindpp:1.0.0
     container_name: dpp-plugin
-    pull_policy: always
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,8 +113,7 @@ services:
   template-repository-registry:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     container_name: template-repository-registry
-    ports:
-      - "8082:8082"
+    pull_policy: always
     command: ["/app/aasenvironmentservice"]
     volumes:
       - ../shared/aas:/app/preconfiguration:ro
@@ -189,7 +186,7 @@ services:
       - twinengine-network
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18
     container_name: postgres
     environment:
       POSTGRES_DB: twinengine

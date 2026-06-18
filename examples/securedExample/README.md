@@ -158,7 +158,6 @@ Rules in [security_env/access-rules.json](security_env/access-rules.json) are ro
 
 DataEngine forwards incoming auth headers:
 
-- `Authorization` → `X-Auth-Token` (to DPP plugin)
 - `Authorization` → `Authorization` (to BaSyx template endpoints)
 
 ### PostgreSQL Database (Plugin)
