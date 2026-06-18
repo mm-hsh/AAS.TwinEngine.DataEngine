@@ -3,6 +3,8 @@
 ## Overview
 This project provides a basic setup to demonstrate how **TwinEngine** can be integrated and run locally. It provides a complete environment for managing Asset Administration Shells (AAS) and related components.
 
+The example now uses the **BaSyx Go** environment with Postgres-backed storage instead of the older Java and Mongo-based stack.
+
 This example includes three submodels:
 
 - Nameplate
@@ -15,6 +17,8 @@ This example includes three submodels:
 - `example/aas/` — contains default submodel templates (Nameplate, ContactInformation, Reliability).
 - `plugin/`— contain JSON files mounted into the plugin containers:
     Changes to these JSON files on the host not visible to the running containers, you must restart the container.
+- BaSyx template repository runs as `eclipsebasyx/aasenvironment-go:SNAPSHOT`.
+- BaSyx metadata storage is initialized through Postgres and `basyxconfigurationservice-go`.
 
 - Two services are built from local sources in the repo:
 
@@ -28,10 +32,10 @@ Rebuild all images then restart:
 
 ``` bash
 # rebuild images
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # restart the stack
-docker-compose up -d
+docker compose up -d
 ```
 ---
 
@@ -39,9 +43,9 @@ docker-compose up -d
 
 - If http://localhost:8080/aas-ui/ doesn't load:
 
-    Check docker-compose logs nginx for errors
+    Check `docker compose logs nginx` for errors
 
-    Make sure port **8080, 8081, 8082, 8083, 8085, 8086** is not used by another service.
+    Make sure port **8080, 8081, 8082, 8085, 8086** is not used by another service.
 
 - If a container fails to start because of bind port, stop whatever uses that port or change the mapping in `docker-compose.yml`.
 

@@ -12,11 +12,11 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./nginx/html:/usr/share/nginx/html
-      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template
+      - ../shared/nginx/html:/usr/share/nginx/html
+      - ../shared/nginx/default.conf.template:/etc/nginx/templates/default.conf.template
     restart: always
     depends_on:
-      template-repository:
+      template-repository-registry:
         condition: service_started
     networks:
       - twinengine-network
@@ -61,35 +61,35 @@ services:
       - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Pattern=/
       - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Index=5
       - TemplateManagement__AasTemplateRepository__Name=AasTemplateRepository
-      - TemplateManagement__AasTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__AasTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__AasTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__AasTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__AasTemplateRepository__headerMappings__0__required=false
-      - TemplateManagement__AasTemplateRepository__healthEndpoint=/swagger
+      - TemplateManagement__AasTemplateRepository__healthEndpoint=/health
       - TemplateManagement__SubmodelTemplateRepository__Name=SubmodelTemplateRepository
-      - TemplateManagement__SubmodelTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__SubmodelTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__required=false
-      - TemplateManagement__SubmodelTemplateRepository__healthEndpoint=/swagger
+      - TemplateManagement__SubmodelTemplateRepository__healthEndpoint=/health
       - TemplateManagement__ConceptDescriptionTemplateRepository__Name=ConceptDescriptionTemplateRepository
-      - TemplateManagement__ConceptDescriptionTemplateRepository__baseUrl=http://template-repository:8082
+      - TemplateManagement__ConceptDescriptionTemplateRepository__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__source=Authorization
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__target=Authorization
       - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__required=false
-      - TemplateManagement__ConceptDescriptionTemplateRepository__healthEndpoint=/swagger
+      - TemplateManagement__ConceptDescriptionTemplateRepository__healthEndpoint=/health
       - TemplateManagement__AasTemplateRegistry__Name=AasTemplateRegistry
-      - TemplateManagement__AasTemplateRegistry__baseUrl=http://template-repository:8082
+      - TemplateManagement__AasTemplateRegistry__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__source=Authorization
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__target=Authorization
       - TemplateManagement__AasTemplateRegistry__headerMappings__0__required=false
-      - TemplateManagement__AasTemplateRegistry__healthEndpoint=/swagger
+      - TemplateManagement__AasTemplateRegistry__healthEndpoint=/health
       - TemplateManagement__SubmodelTemplateRegistry__Name=SubmodelTemplateRegistry
-      - TemplateManagement__SubmodelTemplateRegistry__baseUrl=http://template-repository:8082
+      - TemplateManagement__SubmodelTemplateRegistry__baseUrl=http://template-repository-registry:8082
       - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__source=Authorization
       - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__target=Authorization
       - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__required=false
-      - TemplateManagement__SubmodelTemplateRegistry__healthEndpoint=/swagger
+      - TemplateManagement__SubmodelTemplateRegistry__healthEndpoint=/health
     networks:
       - twinengine-network
 
@@ -129,19 +129,21 @@ services:
     networks:
       - twinengine-network
 
-  template-repository:
+  template-repository-registry:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
-    container_name: template-repository
+    container_name: template-repository-registry
     command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8082:8082"
     volumes:
-      - ./aas:/app/preconfiguration:ro
+      - ../shared/aas:/app/preconfiguration:ro
       - ./security_env:/security_env:ro
     environment:
       - SERVER_PORT=8082
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - CORS_ALLOWEDMETHODS=GET,OPTIONS
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
@@ -192,7 +194,7 @@ services:
     image: eclipsebasyx/aas-gui:SNAPSHOT
     container_name: aas-ui
     volumes:
-      - ./logo:/usr/src/app/dist/Logo
+      - ../shared/logo:/usr/src/app/dist/Logo
     environment:
       AAS_REGISTRY_PATH: http://localhost:8080/shell-descriptors
       SUBMODEL_REGISTRY_PATH: http://localhost:8080/submodel-descriptors
@@ -208,7 +210,7 @@ services:
       KEYCLOAK_REALM: basyx
       KEYCLOAK_CLIENT_ID: basyx-ui
     depends_on:
-      template-repository:
+      template-repository-registry:
         condition: service_started
       keycloak-healthcheck:
         condition: service_completed_successfully
@@ -272,7 +274,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin
     volumes:
-      - ./postgres:/docker-entrypoint-initdb.d
+      - ../shared/postgres:/docker-entrypoint-initdb.d
       - postgres-data:/var/lib/postgresql/data
     restart: always
     healthcheck:
