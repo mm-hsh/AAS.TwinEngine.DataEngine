@@ -140,7 +140,10 @@ services:
   template-repository:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     container_name: template-repository
+    pull_policy: always
     command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8082:8082"
     volumes:
       - ./aas:/app/preconfiguration:ro
     environment:
@@ -158,8 +161,8 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
-      - GENERAL_AASREGISTRYINTEGRATION=false
-      - GENERAL_SUBMODELREGISTRYINTEGRATION=false
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
       - GENERAL_DISCOVERYINTEGRATION=false
       - GENERAL_EXTERNALURL=http://localhost:8080
       - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
@@ -173,7 +176,10 @@ services:
   aas-template-registry:
     image: eclipsebasyx/aasregistry-go:SNAPSHOT
     container_name: aas-template-registry
+    pull_policy: always
     command: ["/app/aasregistryservice"]
+    ports:
+      - "18084:8082"
     environment:
       - SERVER_PORT=8082
       - CORS_ALLOWEDORIGINS=*
@@ -198,7 +204,10 @@ services:
   sm-template-registry:
     image: eclipsebasyx/submodelregistry-go:SNAPSHOT
     container_name: sm-template-registry
+    pull_policy: always
     command: ["/app/submodelregistryservice"]
+    ports:
+      - "8085:8083"
     environment:
       - SERVER_PORT=8083
       - CORS_ALLOWEDORIGINS=*
