@@ -201,6 +201,9 @@ services:
       KEYCLOAK_URL: http://localhost:9090
       KEYCLOAK_REALM: basyx
       KEYCLOAK_CLIENT_ID: basyx-ui
+      ALLOW_EDITING: "false"
+      SM_VIEWER_EDITOR: "false"
+      ALLOW_UPLOADING: "false"
     depends_on:
       template-repository-registry:
         condition: service_started
