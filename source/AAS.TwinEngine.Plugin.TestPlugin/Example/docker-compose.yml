@@ -113,6 +113,7 @@ services:
   template-repository-registry:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     container_name: template-repository-registry
+    pull_policy: always
     ports:
       - "8082:8082"
     command: ["/app/aasenvironmentservice"]
@@ -167,6 +168,7 @@ services:
   aas-web-ui:
     image: eclipsebasyx/aas-gui:SNAPSHOT
     container_name: aas-ui
+    pull_policy: always
     volumes:
       - ./logo:/usr/src/app/dist/Logo
     environment:
@@ -179,6 +181,9 @@ services:
       LOGO_PATH: "MM_Logo.svg"
       PRIMARY_DARK_COLOR: "#00F2E5"
       PRIMARY_LIGHT_COLOR: "#041b2b"
+      ALLOW_EDITING: "false"
+      SM_VIEWER_EDITOR: "false"
+      ALLOW_UPLOADING: "false"
     restart: always
     depends_on:
       template-repository-registry:
