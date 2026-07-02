@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Extensions;
@@ -100,7 +100,7 @@ public class PluginDataProvider(
     public Task<IList<HttpContent>> GetDataForAssetInformationByIdAsync(IList<PluginRequestMetaData> pluginRequests, CancellationToken cancellationToken)
         => GetAndProcessAsync(pluginRequests, AssetInformationEndpoint, cancellationToken);
 
-    public async Task<IList<HttpContent>> GetDataForShellDescriptorsByAssetIdsAsync(IList<PluginRequestMetaData> pluginRequests, string assetIdsHeaderValue, CancellationToken cancellationToken)
+    public async Task<IList<HttpContent>> GetDataForShellDescriptorsByAssetIdsAsync(IList<PluginRequestMetaData> pluginRequests, string? assetIdsHeaderValue, string? idShortHeaderValue, CancellationToken cancellationToken)
     {
         var result = new List<HttpContent>();
         var exceptions = new List<Exception>();
@@ -121,7 +121,14 @@ public class PluginDataProvider(
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                _ = request.Headers.TryAddWithoutValidation("aastwinengine-assetids", assetIdsHeaderValue);
+                if (assetIdsHeaderValue is not null)
+                {
+                    _ = request.Headers.TryAddWithoutValidation("aastwinengine-assetids", assetIdsHeaderValue);
+                }
+                if (idShortHeaderValue is not null)
+                {
+                    _ = request.Headers.TryAddWithoutValidation("aastwinengine-idshort", idShortHeaderValue);
+                }
 
                 var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 

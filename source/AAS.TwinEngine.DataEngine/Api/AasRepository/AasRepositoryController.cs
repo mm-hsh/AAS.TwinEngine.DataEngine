@@ -27,12 +27,13 @@ public class AasRepositoryController(
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.InternalServerError)]
     public async Task<ActionResult<ShellsDto>> GetShellsByAssetIdAsync(
         [FromQuery] string[]? assetIds,
+        [FromQuery] string? idShort,
         [FromQuery] int? limit,
         [FromQuery] string? cursor,
         CancellationToken cancellationToken)
     {
         logger.LogInformation("Start request to get shells by asset identifiers");
-        var response = await aasRepositoryHandler.GetShellsByAssetIdsAsync(assetIds, limit, cursor, cancellationToken).ConfigureAwait(false);
+        var response = await aasRepositoryHandler.GetShellsByAssetIdsAsync(assetIds, idShort, limit, cursor, cancellationToken).ConfigureAwait(false);
         return Ok(response);
     }
 
