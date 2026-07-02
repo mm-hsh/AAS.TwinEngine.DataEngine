@@ -8,6 +8,23 @@ namespace AAS.TwinEngine.Plugin.TestPlugin.PlaywrightTests.SubmodelRegistry;
 public class SubmodelRegistryTests : ApiTestBase
 {
     [Fact]
+    public async Task GetAllSubmodelDescriptors_ShouldReturnSuccess_ContentAsExpected()
+    {
+        var response = await ApiContext.GetAsync("/submodel-descriptors?limit=2");
+
+        AssertSuccessResponse(response);
+        var content = await response.TextAsync();
+        Assert.False(string.IsNullOrEmpty(content));
+
+        var json = JsonDocument.Parse(content);
+        Assert.NotNull(json);
+
+        var root = json.RootElement;
+        Assert.True(root.TryGetProperty("result", out var result));
+        Assert.Equal(JsonValueKind.Array, result.ValueKind);
+    }
+
+    [Fact]
     public async Task GetSubmodelDescriptorById_Contact_ShouldReturnSuccess_ContentAsExpected()
     {
         // Arrange

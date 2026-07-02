@@ -1,11 +1,15 @@
 ﻿using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Application;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasRepository;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Providers;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRegistry;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRegistry.Providers;
+using AAS.TwinEngine.DataEngine.DomainModel.AasRepository;
 using AAS.TwinEngine.DataEngine.DomainModel.Shared;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRegistry;
 using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
+
+using AasCore.Aas3_1;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,6 +22,7 @@ namespace AAS.TwinEngine.DataEngine.UnitTests.ApplicationLogic.Services.Submodel
 public class SubmodelDescriptorServiceTests
 {
     private readonly ISubmodelDescriptorProvider _provider = Substitute.For<ISubmodelDescriptorProvider>();
+    private readonly IAasRepositoryService _aasRepositoryService = Substitute.For<IAasRepositoryService>();
     private readonly SubmodelDescriptorService _sut;
     private readonly IOptions<GeneralConfig> _options;
     private readonly ILogger<SubmodelDescriptorService> _logger = Substitute.For<ILogger<SubmodelDescriptorService>>();
@@ -29,7 +34,62 @@ public class SubmodelDescriptorServiceTests
         {
             DataEngineRepositoryBaseUrl = new Uri("https://www.mm-software.com"),
         });
-        _sut = new SubmodelDescriptorService(_provider, _submodelTemplateMappingProvider, _options, _logger);
+        _sut = new SubmodelDescriptorService(_provider, _submodelTemplateMappingProvider, _aasRepositoryService, _options, _logger);
+    }
+
+    [Fact]
+    public async Task GetAllSubmodelDescriptorsAsync_ReturnsPagedDescriptorsDerivedFromShellSubmodelIds()
+    {
+        var shells = new Shells
+        {
+            Result =
+            [
+                CreateShell("ContactInformation"),
+                CreateShell("Nameplate")
+            ]
+        };
+        _aasRepositoryService.GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>())
+                           .Returns(shells);
+        _submodelTemplateMappingProvider.GetTemplateId("ContactInformation").Returns("ContactInformation");
+        _submodelTemplateMappingProvider.GetTemplateId("Nameplate").Returns("Nameplate");
+        _provider.GetDataForSubmodelDescriptorByIdAsync("ContactInformation", Arg.Any<CancellationToken>())
+                 .Returns(new SubmodelDescriptor { Id = "ContactInformation" });
+        _provider.GetDataForSubmodelDescriptorByIdAsync("Nameplate", Arg.Any<CancellationToken>())
+                 .Returns(new SubmodelDescriptor { Id = "Nameplate" });
+
+        var result = await _sut.GetAllSubmodelDescriptorsAsync(1, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Single(result.Result!);
+        Assert.Equal("ContactInformation", result.Result![0].Id);
+        Assert.NotNull(result.PagingMetaData?.Cursor);
+        Assert.StartsWith("https://www.mm-software.com/submodels/", result.Result![0].Endpoints![0].ProtocolInformation!.Href, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task GetAllSubmodelDescriptorsAsync_SkipsDescriptorWhenSingleDescriptorLookupFails()
+    {
+        var shells = new Shells
+        {
+            Result =
+            [
+                CreateShell("ValidSubmodelId"),
+                CreateShell("MissingSubmodel")
+            ]
+        };
+        _aasRepositoryService.GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>())
+                           .Returns(shells);
+        _submodelTemplateMappingProvider.GetTemplateId("ValidSubmodelId").Returns("ValidSubmodelId");
+        _submodelTemplateMappingProvider.GetTemplateId("MissingSubmodel").Returns("MissingSubmodel");
+        _provider.GetDataForSubmodelDescriptorByIdAsync("ValidSubmodelId", Arg.Any<CancellationToken>())
+                 .Returns(new SubmodelDescriptor { Id = "ValidSubmodelId" });
+        _provider.GetDataForSubmodelDescriptorByIdAsync("MissingSubmodel", Arg.Any<CancellationToken>())
+                 .Throws(new ResourceNotFoundException());
+
+        var result = await _sut.GetAllSubmodelDescriptorsAsync(5, null, CancellationToken.None);
+
+        Assert.Single(result.Result!);
+        Assert.Equal("ValidSubmodelId", result.Result![0].Id);
     }
 
     [Fact]
@@ -167,5 +227,19 @@ public class SubmodelDescriptorServiceTests
             _sut.GetSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
 
         Assert.IsType<RegistryNotAvailableException>(ex);
+    }
+
+    private static AssetAdministrationShell CreateShell(string submodelId)
+    {
+        return new AssetAdministrationShell(
+            id: "shell-id",
+            assetInformation: new AssetInformation(assetKind: AssetKind.Instance, globalAssetId: null),
+            submodels:
+            [
+                new Reference(
+                    type: ReferenceTypes.ModelReference,
+                    keys: [new Key(KeyTypes.Submodel, submodelId)],
+                    referredSemanticId: null)
+            ]);
     }
 }

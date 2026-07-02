@@ -34,6 +34,26 @@ public class SubmodelDescriptorControllerTests
     }
 
     [Fact]
+    public async Task GetAllSubmodelDescriptorsAsync_ReturnsOkResult()
+    {
+        var expected = new SubmodelDescriptorsDto
+        {
+            PagingMetaData = new PagingMetaDataDto { Cursor = "nextCursor" },
+            Result = []
+        };
+
+        _handler
+            .GetAllSubmodelDescriptors(Arg.Any<GetSubmodelDescriptorsRequest>(), Arg.Any<CancellationToken>())
+            .Returns(expected);
+
+        var result = await _sut.GetAllSubmodelDescriptorsAsync(10, null, CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<SubmodelDescriptorsDto>(okResult.Value);
+        Assert.Equal(expected.PagingMetaData?.Cursor, dto.PagingMetaData?.Cursor);
+    }
+
+    [Fact]
     public async Task GetSubmodelDescriptorByIdAsync_ReturnsOkResult()
     {
         var encodedId = SubmodelId.EncodeBase64Url();

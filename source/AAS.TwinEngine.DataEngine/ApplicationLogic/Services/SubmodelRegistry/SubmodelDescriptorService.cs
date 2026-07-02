@@ -2,6 +2,7 @@
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Extensions;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Providers;
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasRepository;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRegistry.Providers;
 using AAS.TwinEngine.DataEngine.DomainModel.Shared;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRegistry;
@@ -16,10 +17,47 @@ namespace AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRegistry;
 public class SubmodelDescriptorService(
     ISubmodelDescriptorProvider submodelDescriptorProvider,
     ISubmodelTemplateMappingProvider submodelTemplateMappingProvider,
+    IAasRepositoryService aasRepositoryService,
     IOptions<GeneralConfig> generalConfig,
     ILogger<SubmodelDescriptorService> logger) : ISubmodelDescriptorService
 {
     private readonly Uri _baseUrl = generalConfig.Value.DataEngineRepositoryBaseUrl ?? throw new InvalidDependencyException(nameof(generalConfig.Value.DataEngineRepositoryBaseUrl), logger);
+
+    public async Task<SubmodelDescriptors> GetAllSubmodelDescriptorsAsync(int? limit, string? cursor, CancellationToken cancellationToken)
+    {
+        var shells = await aasRepositoryService
+                         .GetShellsByFiltersAsync(null, null, null, cancellationToken)
+                         .ConfigureAwait(false);
+
+        var submodelIds = ExtractDistinctSubmodelIds(shells.Result);
+        var allDescriptors = new List<SubmodelDescriptor>();
+
+        foreach (var submodelId in submodelIds)
+        {
+            try
+            {
+                var descriptor = await GetSubmodelDescriptorByIdAsync(submodelId, cancellationToken).ConfigureAwait(false);
+                allDescriptors.Add(descriptor);
+            }
+            catch (SubmodelDescriptorNotFoundException ex)
+            {
+                logger.LogWarning(ex, "Submodel descriptor was not found for submodel id {SubmodelId}. Continuing with remaining descriptors.", submodelId);
+            }
+        }
+
+        if (submodelIds.Count > 0 && allDescriptors.Count == 0)
+        {
+            throw new SubmodelDescriptorNotFoundException();
+        }
+
+        var (pagedItems, pagingMetaData) = PagingExtensions.GetPagedResult(allDescriptors, d => d.Id!, limit, cursor);
+
+        return new SubmodelDescriptors
+        {
+            PagingMetaData = pagingMetaData,
+            Result = pagedItems
+        };
+    }
 
     public async Task<SubmodelDescriptor> GetSubmodelDescriptorByIdAsync(string id, CancellationToken cancellationToken)
     {
@@ -87,6 +125,17 @@ public class SubmodelDescriptorService(
     {
         endpoint.ProtocolInformation ??= new ProtocolInformationData();
         endpoint.ProtocolInformation.Href = href;
+    }
+
+    private static IList<string> ExtractDistinctSubmodelIds(IList<AasCore.Aas3_1.IAssetAdministrationShell>? shells)
+    {
+        return shells?
+               .SelectMany(shell => shell.Submodels ?? [])
+               .SelectMany(reference => reference.Keys ?? [])
+               .Select(key => key.Value)
+               .Where(value => !string.IsNullOrWhiteSpace(value))
+               .Distinct(StringComparer.OrdinalIgnoreCase)
+               .ToList() ?? [];
     }
 
     private string GenerateHref(string encodedId) => $"{_baseUrl}{ApiPaths.Submodels}/{encodedId}";

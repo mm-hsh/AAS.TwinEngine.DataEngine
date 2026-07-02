@@ -19,6 +19,19 @@ public class SubmodelDescriptorController(
     ISubmodelDescriptorHandler submodelDescriptorHandler)
     : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(SubmodelDescriptorsDto), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.InternalServerError)]
+    public async Task<ActionResult<SubmodelDescriptorsDto>> GetAllSubmodelDescriptorsAsync([FromQuery] int? limit, [FromQuery] string? cursor, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Get All Submodel Descriptors");
+        var request = new GetSubmodelDescriptorsRequest(limit, cursor);
+        var response = await submodelDescriptorHandler.GetAllSubmodelDescriptors(request, cancellationToken).ConfigureAwait(false);
+        return Ok(response);
+    }
+
     [HttpGet("{submodelIdentifier}")]
     [ProducesResponseType(typeof(SubmodelDescriptorDto), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]
