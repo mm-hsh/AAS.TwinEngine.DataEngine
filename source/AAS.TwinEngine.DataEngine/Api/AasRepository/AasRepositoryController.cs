@@ -32,7 +32,7 @@ public class AasRepositoryController(
         [FromQuery] string? cursor,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Start request to get shells by asset identifiers");
+        logger.LogInformation("Start request to get shells (assetIds/idShort filters)");
         var response = await aasRepositoryHandler.GetShellsByAssetIdsAsync(assetIds, idShort, limit, cursor, cancellationToken).ConfigureAwait(false);
         return Ok(response);
     }
