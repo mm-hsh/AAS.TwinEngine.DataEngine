@@ -56,7 +56,6 @@ public class SubmodelDescriptorController(
     /// <response code="400">Bad Request, e.g.the request parameters of the format of the request body is wrong.</response>
     /// <response code="404">Not Found</response>
     /// <response code="500">Internal Server Error</response>
-
     [HttpGet("{submodelIdentifier}")]
     [ProducesResponseType(typeof(SubmodelDescriptorDto), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]

@@ -54,6 +54,35 @@ public class SubmodelDescriptorControllerTests
     }
 
     [Fact]
+    public async Task GetAllSubmodelDescriptorsAsync_ShouldPassLimitAndCursorToHandler()
+    {
+        const int limit = 25;
+        const string cursor = "nextCursor";
+
+        _handler
+            .GetAllSubmodelDescriptors(Arg.Any<GetSubmodelDescriptorsRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new SubmodelDescriptorsDto());
+
+        await _sut.GetAllSubmodelDescriptorsAsync(limit, cursor, CancellationToken.None);
+
+        await _handler.Received(1).GetAllSubmodelDescriptors(
+            Arg.Is<GetSubmodelDescriptorsRequest>(r =>r.Limit == limit && r.Cursor == cursor), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task GetAllSubmodelDescriptorsAsync_ThrowsInternalServerException()
+    {
+        _handler
+            .GetAllSubmodelDescriptors(Arg.Any<GetSubmodelDescriptorsRequest>(), Arg.Any<CancellationToken>())
+            .Throws(new InternalServerException("Internal error"));
+
+        var ex = await Record.ExceptionAsync(() =>
+            _sut.GetAllSubmodelDescriptorsAsync(10, null, CancellationToken.None));
+
+        Assert.IsType<InternalServerException>(ex);
+    }
+
+    [Fact]
     public async Task GetSubmodelDescriptorByIdAsync_ReturnsOkResult()
     {
         var encodedId = SubmodelId.EncodeBase64Url();
