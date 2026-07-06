@@ -1,5 +1,4 @@
-﻿using System.ComponentModel;
-using System.Net;
+﻿using System.Net;
 
 using AAS.TwinEngine.DataEngine.Api.SubmodelRegistry.Handler;
 using AAS.TwinEngine.DataEngine.Api.SubmodelRegistry.Requests;
