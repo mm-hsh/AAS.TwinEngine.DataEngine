@@ -29,6 +29,7 @@ public class AasRepositoryController(
     /// Returns all Asset Administration Shells
     /// </summary>
     /// <param name="assetIds">A list of specific Asset identifiers. Each Asset identifier is a base64-url-encoded SpecificAssetId</param>
+    /// <param name="idShort">The Asset Administration Shell’s IdShort</param>
     /// <param name="limit">The maximum number of elements in the response array</param>
     /// <param name="cursor">A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue</param>
     /// <param name="cancellationToken">Cancellation token.</param>
