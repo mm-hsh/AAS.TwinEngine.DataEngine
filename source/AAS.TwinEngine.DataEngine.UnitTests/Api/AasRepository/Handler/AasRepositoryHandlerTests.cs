@@ -8,7 +8,7 @@ using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasRepository;
 using AAS.TwinEngine.DataEngine.DomainModel.AasRepository;
 using AAS.TwinEngine.DataEngine.DomainModel.Shared;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
 
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +23,73 @@ public class AasRepositoryHandlerTests
     private readonly AasRepositoryHandler _sut;
 
     public AasRepositoryHandlerTests() => _sut = new AasRepositoryHandler(_logger, _aasRepositoryService);
+
+    [Fact]
+    public async Task GetShellsByAssetIdsAsync_WithNullAssetIds_ReturnsAllShells()
+    {
+        _ = _aasRepositoryService.GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>())
+            .Returns(new Shells { PagingMetaData = new PagingMetaData { Cursor = null }, Result = [] });
+
+        var result = await _sut.GetShellsByAssetIdsAsync(null, null, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        await _aasRepositoryService.Received().GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetShellsByAssetIdsAsync_WithEmptyAssetIds_ReturnsAllShells()
+    {
+        _ = _aasRepositoryService.GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>())
+            .Returns(new Shells { PagingMetaData = new PagingMetaData { Cursor = null }, Result = [] });
+
+        var result = await _sut.GetShellsByAssetIdsAsync([], null, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        await _aasRepositoryService.Received().GetShellsByFiltersAsync(null, null, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetShellsByAssetIdsAsync_WithInvalidBase64Url_ThrowsInvalidUserInputException()
+    {
+        var assetIds = new[] { "not-valid-base64!!!" };
+
+        await Assert.ThrowsAsync<InvalidUserInputException>(
+            () => _sut.GetShellsByAssetIdsAsync(assetIds, null, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetShellsByAssetIdsAsync_WithValidInput_ReturnsShells()
+    {
+        var json = """{"name":"SerialNumber","value":"SN-4711"}""";
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        var assetIds = new[] { encoded };
+
+        var shell = new AssetAdministrationShell(
+            "urn:example:aas:001",
+            new AssetInformation(AssetKind.Instance));
+
+        _ = _aasRepositoryService.GetShellsByFiltersAsync(
+            Arg.Any<IList<SpecificAssetId>?>(), null, null, Arg.Any<CancellationToken>())
+            .Returns(new Shells { PagingMetaData = new PagingMetaData { Cursor = null }, Result = [shell] });
+
+        var result = await _sut.GetShellsByAssetIdsAsync(assetIds, null, null, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Single(result.Result!);
+    }
+
+    [Fact]
+    public async Task GetShellsByAssetIdsAsync_WithNegativeLimit_ThrowsInvalidUserInputException()
+    {
+        var json = """{"name":"SerialNumber","value":"SN-4711"}""";
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+        var assetIds = new[] { encoded };
+
+        await Assert.ThrowsAsync<InvalidUserInputException>(
+            () => _sut.GetShellsByAssetIdsAsync(assetIds, -1, null, CancellationToken.None));
+    }
 
     [Fact]
     public async Task GetShellByIdAsync_ReturnShell_WhenExists()

@@ -1,8 +1,9 @@
 vars:pre-request {
   aasIdentifier: https://mm-software.com/ids/aas/000-001
   submodelIdentifierContact: https://mm-software.com/submodel/000-001/ContactInformation
-  submodelIdentifierNameplate: https://mm-software.com/submodel/000-001/Nameplate
-  submodelIdentifierReliability: https://mm-software.com/submodel/000-001/Reliability
+  submodelIdentifierHandoverDocumentation: https://mm-software.com/submodel/000-001/HandoverDocumentation
+  submodelIdentifierCustomSubmodel: https://mm-software.com/submodel/000-001/CustomSubmodel
+  assetId: {"name":"SerialNumber","value":"SN-1111"}
 }
 
 script:pre-request {
@@ -13,8 +14,9 @@ script:pre-request {
   const varsToEncode = [
     'aasIdentifier',
     'submodelIdentifierContact',
-    'submodelIdentifierNameplate',
-    'submodelIdentifierReliability'
+    'submodelIdentifierHandoverDocumentation',
+    'submodelIdentifierCustomSubmodel',
+    'assetId'
   ];
   
   varsToEncode.forEach(name => {

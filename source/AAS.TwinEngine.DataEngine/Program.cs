@@ -1,4 +1,7 @@
-﻿using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
+﻿using System.Text.Json.Serialization;
+
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
+using AAS.TwinEngine.DataEngine.Infrastructure.Http.Authorization.Middleware;
 using AAS.TwinEngine.DataEngine.Infrastructure.Monitoring;
 using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Services;
 using AAS.TwinEngine.DataEngine.ServiceConfiguration;
@@ -17,17 +20,37 @@ public class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        _ = builder.Configuration.AddJsonFile("/config/dataengine-env.json", optional: true, reloadOnChange: true);
+
         _ = builder.Host.UseSerilog();
         builder.ConfigureLogging(builder.Configuration);
         builder.ConfigureCorsServices();
-        _ = builder.Services.AddHealthChecks().AddCheck<PluginManifestHealthCheck>("system_health");
+        _ = builder.Services.AddHealthChecks()
+            .AddCheck<PluginAvailabilityHealthCheck>("plugin")
+            .AddCheck<TemplateRegistryHealthCheck>("template_registry")
+            .AddCheck<TemplateRepositoryHealthCheck>("template_repository");
 
         _ = builder.Services.AddHttpContextAccessor();
+
+        var allowedHosts = builder.Configuration.GetValue<string>("General:AllowedHosts") ?? "*";
+        _ = builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(options =>
+        {
+            options.AllowedHosts = allowedHosts
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+        });
+
         builder.Services.ConfigureInfrastructure(builder.Configuration);
         builder.Services.ConfigureApplication(builder.Configuration);
+        builder.Services.ConfigureResponseCompression();
         _ = builder.Services.AddAuthorization();
 
-        _ = builder.Services.AddControllers();
+        _ = builder.Services.AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            });
 
         _ = builder.Services.AddEndpointsApiExplorer();
         _ = builder.Services.AddOpenApiDocument(settings =>
@@ -56,6 +79,7 @@ public class Program
             {
                 var pluginManifestInitializer = scope.ServiceProvider.GetRequiredService<PluginManifestInitializer>();
                 await pluginManifestInitializer.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
+                pluginManifestHealthStatus.IsHealthy = true;
             }
             catch (MultiPluginConflictException)
             {
@@ -64,6 +88,9 @@ public class Program
         }
 
         _ = app.UseExceptionHandler();
+        _ = app.UseResponseCompression();
+        _ = app.UseHostFiltering();
+        _ = app.UseMiddleware<HeaderSanitizationMiddleware>();
         _ = app.UseHttpsRedirection();
         _ = app.UseAuthorization();
         app.UseCorsServices();

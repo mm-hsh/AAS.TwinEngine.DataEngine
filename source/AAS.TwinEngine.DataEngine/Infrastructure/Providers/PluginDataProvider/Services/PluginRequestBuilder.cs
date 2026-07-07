@@ -2,8 +2,8 @@
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
 using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.Infrastructure.Monitoring;
-using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Config;
 using AAS.TwinEngine.DataEngine.Infrastructure.Shared;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
 using Json.Schema;
 
@@ -15,22 +15,20 @@ public class PluginRequestBuilder(IPluginManifestHealthStatus pluginManifestHeal
     {
         EnsureManifestIsHealthy();
 
-        return jsonSchema
+        return [.. jsonSchema
             .Select(kvp => new PluginRequestSubmodel(
-                $"{PluginConfig.HttpClientNamePrefix}{kvp.Key}",
-                CreateHttpContent(kvp.Value)))
-            .ToList();
+                $"{HttpClientNames.PluginDataProviderPrefix}{kvp.Key}",
+                CreateHttpContent(kvp.Value)))];
     }
 
     public IList<PluginRequestMetaData> Build(IList<string> plugins, string? aasIdentifier = null)
     {
         EnsureManifestIsHealthy();
 
-        return plugins
+        return [.. plugins
             .Select(plugin => new PluginRequestMetaData(
-                $"{PluginConfig.HttpClientNamePrefix}{plugin}",
-                aasIdentifier ?? string.Empty))
-            .ToList();
+                $"{HttpClientNames.PluginDataProviderPrefix}{plugin}",
+                aasIdentifier ?? string.Empty))];
     }
 
     private void EnsureManifestIsHealthy()

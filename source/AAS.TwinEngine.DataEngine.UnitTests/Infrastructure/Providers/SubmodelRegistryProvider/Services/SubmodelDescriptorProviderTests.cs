@@ -1,16 +1,19 @@
 ﻿using System.Net;
 
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
-using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Config;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRegistry;
 using AAS.TwinEngine.DataEngine.Infrastructure.Http.Clients;
 using AAS.TwinEngine.DataEngine.Infrastructure.Providers.SubmodelRegistryProvider.Services;
 using AAS.TwinEngine.DataEngine.UnitTests.Infrastructure.Providers.PluginDataProvider.Services;
 
+using AasCore.Aas3_1;
+
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using NSubstitute;
+
+using UnauthorizedAccessException = AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure.UnauthorizedAccessException;
 
 namespace AAS.TwinEngine.DataEngine.UnitTests.Infrastructure.Providers.SubmodelRegistryProvider.Services;
 
@@ -20,30 +23,7 @@ public class SubmodelDescriptorProviderTests
     private readonly ICreateClient _clientFactory = Substitute.For<ICreateClient>();
     private readonly SubmodelDescriptorProvider _sut;
 
-    public SubmodelDescriptorProviderTests()
-    {
-        var options = Options.Create(new AasEnvironmentConfig
-        {
-            SubModelRegistryPath = "submodel-registry",
-            SubModelRegistryBaseUrl = new Uri("https://mm-software/fakeUrl")
-        });
-
-        _sut = new SubmodelDescriptorProvider(_logger, _clientFactory, options);
-    }
-
-    [Fact]
-    public void Constructor_Throws_WhenBaseUrlMissing()
-    {
-        var invalidEnv = new AasEnvironmentConfig
-        {
-            SubModelRegistryPath = null!,
-        };
-        var options = Options.Create(invalidEnv);
-
-        var ex = Assert.Throws<ArgumentNullException>(() =>
-                                                          new SubmodelDescriptorProvider(_logger, _clientFactory, options));
-        Assert.Contains("aasEnvironment", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
+    public SubmodelDescriptorProviderTests() => _sut = new SubmodelDescriptorProvider(_logger, _clientFactory);
 
     [Fact]
     public async Task GetDataForSubmodelDescriptorByIdAsync_ReturnsSubmodelDesciptor_WhenResponseIsSuccessful()
@@ -58,13 +38,88 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         var result = await _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None);
 
         Assert.Equal(expectedDescriptor.Id, result.Id);
     }
+
+        [Fact]
+        public async Task GetDataForSubmodelDescriptorByIdAsync_DeserializesAasNestedTypes_WhenResponseContainsAasPayload()
+        {
+                const string id = "https://mm-software.com/submodel/nameplate";
+                const string jsonResponse = """
+                                                                        {
+                                                                            "description": [
+                                                                                {
+                                                                                    "language": "en",
+                                                                                    "text": "Nameplate Submodel Template"
+                                                                                }
+                                                                            ],
+                                                                            "displayName": [
+                                                                                {
+                                                                                    "language": "en",
+                                                                                    "text": "Nameplate"
+                                                                                }
+                                                                            ],
+                                                                            "extensions": [
+                                                                                {
+                                                                                    "name": "templateSource",
+                                                                                    "valueType": "xs:string",
+                                                                                    "value": "Nameplate"
+                                                                                }
+                                                                            ],
+                                                                            "administration": {
+                                                                                "version": "1",
+                                                                                "revision": "0"
+                                                                            },
+                                                                            "idShort": "Nameplate",
+                                                                            "id": "https://mm-software.com/submodel/nameplate",
+                                                                            "semanticId": {
+                                                                                "type": "ExternalReference",
+                                                                                "keys": [
+                                                                                    {
+                                                                                        "type": "GlobalReference",
+                                                                                        "value": "https://admin-shell.io/zvei/nameplate/2/0/Nameplate"
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        }
+                                                                        """;
+
+                using var messageHandler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage
+                {
+                        StatusCode = HttpStatusCode.OK,
+                        Content = new StringContent(jsonResponse)
+                }));
+                using var httpClient = new HttpClient(messageHandler);
+                httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
+                _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry).Returns(httpClient);
+
+                var result = await _sut.GetDataForSubmodelDescriptorByIdAsync(id, CancellationToken.None);
+
+                Assert.NotNull(result.Description);
+                Assert.Equal("en", result.Description![0].Language);
+                Assert.Equal("Nameplate Submodel Template", result.Description[0].Text);
+
+                Assert.NotNull(result.DisplayName);
+                Assert.Equal("Nameplate", result.DisplayName![0].Text);
+
+                Assert.NotNull(result.Extensions);
+                Assert.Equal("templateSource", result.Extensions![0].Name);
+                Assert.Equal(DataTypeDefXsd.String, result.Extensions[0].ValueType);
+                Assert.Equal("Nameplate", result.Extensions[0].Value);
+
+                Assert.NotNull(result.Administration);
+                Assert.Equal("1", result.Administration!.Version);
+                Assert.Equal("0", result.Administration.Revision);
+
+                Assert.NotNull(result.SemanticId);
+                Assert.Equal(ReferenceTypes.ExternalReference, result.SemanticId!.Type);
+                Assert.Equal("https://admin-shell.io/zvei/nameplate/2/0/Nameplate", result.SemanticId.Keys[0].Value);
+        }
 
     [Fact]
     public async Task GetDataForSubmodelDescriptorByIdAsync_ThrowsResponseParsingException_WhenDeserializationFails()
@@ -78,7 +133,7 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         await Assert.ThrowsAsync<ResponseParsingException>(() => _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
@@ -96,7 +151,7 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         await Assert.ThrowsAsync<ResponseParsingException>(() => _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
@@ -114,7 +169,7 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
@@ -133,10 +188,10 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
-        await Assert.ThrowsAsync<ServiceAuthorizationException>(() =>
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
     }
 
@@ -152,10 +207,10 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
-        await Assert.ThrowsAsync<ServiceAuthorizationException>(() =>
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
     }
 
@@ -171,7 +226,7 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         await Assert.ThrowsAsync<RequestTimeoutException>(() =>
@@ -190,11 +245,10 @@ public class SubmodelDescriptorProviderTests
         }));
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://mm-software/fakeUrl");
-        _clientFactory.CreateClient(AasEnvironmentConfig.SubmodelRegistryHttpClientName)
+        _clientFactory.CreateClient(HttpClientNames.SubmodelRegistry)
                       .Returns(httpClient);
 
         await Assert.ThrowsAsync<ValidationFailedException>(() =>
             _sut.GetDataForSubmodelDescriptorByIdAsync(Id, CancellationToken.None));
     }
-
 }

@@ -6,7 +6,7 @@ using AAS.TwinEngine.DataEngine.Api.AasRepository.Requests;
 using AAS.TwinEngine.DataEngine.Api.AasRepository.Responses;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Responses;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
 
 using Asp.Versioning;
 
@@ -21,6 +21,21 @@ public class AasRepositoryController(
     ILogger<AasRepositoryController> logger,
     IAasRepositoryHandler aasRepositoryHandler) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(ShellsDto), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.InternalServerError)]
+    public async Task<ActionResult<ShellsDto>> GetShellsByAssetIdAsync(
+        [FromQuery] string[]? assetIds,
+        [FromQuery] int? limit,
+        [FromQuery] string? cursor,
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Start request to get shells by asset identifiers");
+        var response = await aasRepositoryHandler.GetShellsByAssetIdsAsync(assetIds, limit, cursor, cancellationToken).ConfigureAwait(false);
+        return Ok(response);
+    }
+
     [HttpGet("{aasIdentifier}")]
     [ProducesResponseType(typeof(IAssetAdministrationShell), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]
@@ -52,7 +67,7 @@ public class AasRepositoryController(
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.NotFound)]
     [ProducesResponseType(typeof(ServiceErrorResponse), (int)HttpStatusCode.InternalServerError)]
-    public async Task<ActionResult<JsonObject>> GetSubmodelRefByIdAsync([FromRoute] string aasIdentifier, int? limit, [FromQuery] string? cursor, CancellationToken cancellationToken)
+    public async Task<ActionResult<JsonObject>> GetSubmodelRefByIdAsync([FromRoute] string aasIdentifier, [FromQuery] int? limit, [FromQuery] string? cursor, CancellationToken cancellationToken)
     {
         logger.LogInformation("Start request to get submodel-refs for shell");
         var request = new GetSubmodelRefRequest(aasIdentifier, limit, cursor);

@@ -1,6 +1,6 @@
 ﻿using AAS.TwinEngine.DataEngine.DomainModel.AasRegistry;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
 
 namespace AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Providers;
 
@@ -8,7 +8,7 @@ public interface ITemplateProvider
 {
     Task<ISubmodel> GetSubmodelTemplateAsync(string templateId, CancellationToken cancellationToken);
 
-    Task<ShellDescriptor> GetShellDescriptorsTemplateAsync(CancellationToken cancellationToken);
+    Task<ShellDescriptor> GetShellDescriptorTemplateAsync(string templateId, CancellationToken cancellationToken);
 
     Task<IAssetAdministrationShell> GetShellTemplateAsync(string templateId, CancellationToken cancellationToken);
 

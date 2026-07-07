@@ -1,4 +1,5 @@
-﻿using AAS.TwinEngine.Plugin.TestPlugin.Infrastructure.Providers;
+﻿using AAS.TwinEngine.Plugin.TestPlugin.Infrastructure.Monitoring;
+using AAS.TwinEngine.Plugin.TestPlugin.Infrastructure.Providers;
 using AAS.TwinEngine.Plugin.TestPlugin.ServiceConfiguration;
 
 using Asp.Versioning;
@@ -19,7 +20,10 @@ public static class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.ConfigureInfrastructure(builder.Configuration);
         builder.Services.ConfigureApplication(builder.Configuration);
+        builder.Services.ConfigureResponseCompression();
         builder.Services.AddAuthorization();
+
+        builder.Services.AddHealthChecks().AddCheck<MockDataHealthCheck>("mock_data");
 
         builder.Services.AddControllers();
 
@@ -41,6 +45,8 @@ public static class Program
 
         var app = builder.Build();
 
+        app.MapHealthChecks("/healthz");
+
         using (var scope = app.Services.CreateScope())
         {
             var initializer = scope.ServiceProvider.GetRequiredService<MockDataInitializer>();
@@ -48,10 +54,10 @@ public static class Program
         }
 
         app.UseExceptionHandler();
+        app.UseResponseCompression();
         app.UseHttpsRedirection();
         app.UseAuthorization();
         app.UseOpenApi(c => c.PostProcess = (d, _) => d.Servers.Clear());
-        app.UseSwaggerUI(c => c.SwaggerEndpoint($"/swagger/{ApiVersion:F1}/swagger.json", ApiTitle));
         app.MapControllers();
 
         await app.RunAsync();

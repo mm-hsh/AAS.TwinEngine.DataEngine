@@ -4,37 +4,42 @@ using System.Text.Json.Nodes;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Extensions;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Providers;
-using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Config;
 using AAS.TwinEngine.DataEngine.DomainModel.AasRegistry;
+using AAS.TwinEngine.DataEngine.DomainModel.Shared;
+using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRegistry;
 using AAS.TwinEngine.DataEngine.Infrastructure.Http.Clients;
+using AAS.TwinEngine.DataEngine.Infrastructure.Shared;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
 
-using Microsoft.Extensions.Options;
+using UnauthorizedAccessException = AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure.UnauthorizedAccessException;
 
 namespace AAS.TwinEngine.DataEngine.Infrastructure.Providers.TemplateProvider.Services;
 
-public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient clientFactory, IOptions<AasEnvironmentConfig> aasEnvironment) : ITemplateProvider
+public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient clientFactory) : ITemplateProvider
 {
-    private readonly string _subModelRepositoryPath = aasEnvironment.Value.SubModelRepositoryPath;
-    private readonly string _aasRegistryPath = aasEnvironment.Value.AasRegistryPath;
-    private readonly string _aasRepositoryPath = aasEnvironment.Value.AasRepositoryPath;
-    private readonly string _submodelRefPath = aasEnvironment.Value.SubmodelRefPath;
-    private readonly string _conceptDescriptionPath = aasEnvironment.Value.ConceptDescriptionPath;
+    private const string SubModelRepositoryPath = ApiPaths.Submodels;
+    private const string AasRegistryPath = ApiPaths.ShellDescriptors;
+    private const string AasRepositoryPath = ApiPaths.Shells;
+    private const string SubmodelRefPath = ApiPaths.SubmodelRefs;
+    private const string ConceptDescriptionPath = ApiPaths.ConceptDescriptions;
 
     public async Task<ISubmodel> GetSubmodelTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
         var encodedTemplateId = templateId.EncodeBase64Url(logger);
 
-        var url = $"{_subModelRepositoryPath}/{encodedTemplateId}";
+        var url = $"{SubModelRepositoryPath}/{encodedTemplateId}";
 
-        var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasEnvironmentRepoHttpClientName, cancellationToken).ConfigureAwait(false);
+        var response = await SendGetRequestAsync(url, HttpClientNames.SubmodelTemplateRepository, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
             var jsonNode = JsonNode.Parse(content);
-            return Jsonization.Deserialize.SubmodelFrom(jsonNode!);
+            var submodel = Jsonization.Deserialize.SubmodelFrom(jsonNode!);
+            UpdateSubmodelTemplateKind(submodel);
+            return submodel;
         }
         catch (JsonException ex)
         {
@@ -43,42 +48,31 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
         }
     }
 
-    public async Task<ShellDescriptor> GetShellDescriptorsTemplateAsync(CancellationToken cancellationToken)
+    public async Task<ShellDescriptor> GetShellDescriptorTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
-        var url = $"{_aasRegistryPath}";
+        var encodedTemplateId = templateId.EncodeBase64Url(logger);
+        var url = $"{AasRegistryPath}/{encodedTemplateId}";
 
-        var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasRegistryHttpClientName, cancellationToken).ConfigureAwait(false);
+        var response = await SendGetRequestAsync(url, HttpClientNames.AasRegistry, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            using var document = JsonDocument.Parse(content);
+            var jsonNode = JsonNode.Parse(content);
+            var descriptorNode = jsonNode?["result"] ?? jsonNode;
+            var descriptor = DeserializeShellDescriptor(descriptorNode);
 
-            if (!document.RootElement.TryGetProperty("result", out var resultArray))
-            {
-                logger.LogWarning("Shell-descriptor JSON does not contain a valid 'result' array.");
-                throw new ResourceNotFoundException();
-            }
-
-            if (resultArray.GetArrayLength() == 0)
-            {
-                logger.LogInformation("No shell descriptors found. Returning a manually created template.");
-                return ShellDescriptor.CreateDefault();
-            }
-
-            var shellDescriptorJson = resultArray[0].GetRawText();
-            var descriptor = JsonSerializer.Deserialize<ShellDescriptor>(shellDescriptorJson);
-            if (descriptor != null)
+            if (descriptor is not null)
             {
                 return descriptor;
             }
 
-            logger.LogError("Failed to deserialize the shell descriptor.");
+            logger.LogError("Failed to deserialize shell descriptor template. TemplateId: {TemplateId}", templateId);
             throw new ResponseParsingException();
         }
         catch (JsonException ex)
         {
-            logger.LogError(ex, "Failed to parse or deserialize shell descriptor JSON.");
+            logger.LogError(ex, "Failed to parse or deserialize shell descriptor template JSON. TemplateId: {TemplateId}", templateId);
             throw new ResponseParsingException();
         }
     }
@@ -86,9 +80,9 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
     public async Task<IAssetAdministrationShell> GetShellTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
         var encodedTemplateId = templateId.EncodeBase64Url(logger);
-        var url = $"{_aasRepositoryPath}/{encodedTemplateId}";
+        var url = $"{AasRepositoryPath}/{encodedTemplateId}";
 
-        var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasEnvironmentRepoHttpClientName, cancellationToken).ConfigureAwait(false);
+        var response = await SendGetRequestAsync(url, HttpClientNames.AasTemplateRepository, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -113,9 +107,9 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
     public async Task<IAssetInformation> GetAssetInformationTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
         var encodedTemplateId = templateId.EncodeBase64Url(logger);
-        var url = $"{_aasRepositoryPath}/{encodedTemplateId}/asset-information";
+        var url = $"{AasRepositoryPath}/{encodedTemplateId}/asset-information";
 
-        var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasEnvironmentRepoHttpClientName, cancellationToken).ConfigureAwait(false);
+        var response = await SendGetRequestAsync(url, HttpClientNames.AasTemplateRepository, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -140,9 +134,9 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
     public async Task<List<IReference>> GetSubmodelRefByIdAsync(string templateId, CancellationToken cancellationToken)
     {
         var encodedTemplateId = templateId.EncodeBase64Url(logger);
-        var url = $"{_aasRepositoryPath}/{encodedTemplateId}/{_submodelRefPath}";
+        var url = $"{AasRepositoryPath}/{encodedTemplateId}/{SubmodelRefPath}";
 
-        var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasEnvironmentRepoHttpClientName, cancellationToken).ConfigureAwait(false);
+        var response = await SendGetRequestAsync(url, HttpClientNames.AasTemplateRepository, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -185,11 +179,11 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
     {
         var encodedCdId = cdIdentifier.EncodeBase64Url(logger);
 
-        var url = $"{_conceptDescriptionPath}/{encodedCdId}";
+        var url = $"{ConceptDescriptionPath}/{encodedCdId}";
 
         try
         {
-            var response = await SendGetRequestAsync(url, AasEnvironmentConfig.AasEnvironmentRepoHttpClientName, cancellationToken).ConfigureAwait(false);
+            var response = await SendGetRequestAsync(url, HttpClientNames.ConceptDescriptorTemplateRepository, cancellationToken).ConfigureAwait(false);
             var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var jsonNode = JsonNode.Parse(content);
             return Jsonization.Deserialize.ConceptDescriptionFrom(jsonNode!);
@@ -232,7 +226,7 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
             case System.Net.HttpStatusCode.Unauthorized:
             case System.Net.HttpStatusCode.Forbidden:
                 logger.LogError("Unauthorized access. Endpoint: {Url}", url);
-                throw new ServiceAuthorizationException();
+                throw new UnauthorizedAccessException();
 
             case System.Net.HttpStatusCode.RequestTimeout:
                 logger.LogError("Request timed out. Endpoint: {Url}", url);
@@ -243,4 +237,30 @@ public class TemplateProvider(ILogger<TemplateProvider> logger, ICreateClient cl
                 throw new ValidationFailedException();
         }
     }
+
+    private static ShellDescriptor? DeserializeShellDescriptor(JsonNode? descriptorNode)
+    {
+        if (descriptorNode is null)
+        {
+            return null;
+        }
+
+        return new ShellDescriptor
+        {
+            Description = AasJsonNodeDeserializer.DeserializeAasArray(descriptorNode["description"], Jsonization.Deserialize.LangStringTextTypeFrom),
+            DisplayName = AasJsonNodeDeserializer.DeserializeAasArray(descriptorNode["displayName"], Jsonization.Deserialize.LangStringNameTypeFrom),
+            Extensions = AasJsonNodeDeserializer.DeserializeAasArray(descriptorNode["extensions"], Jsonization.Deserialize.ExtensionFrom),
+            Administration = AasJsonNodeDeserializer.DeserializeAasNode(descriptorNode["administration"], Jsonization.Deserialize.AdministrativeInformationFrom),
+            AssetKind = AasJsonNodeDeserializer.DeserializeEnum<AssetKind>(descriptorNode["assetKind"]),
+            AssetType = AasJsonNodeDeserializer.DeserializeEnum<AssetKind>(descriptorNode["assetType"]),
+            Endpoints = descriptorNode["endpoints"]?.Deserialize<List<EndpointData>>(),
+            GlobalAssetId = descriptorNode["globalAssetId"]?.GetValue<string>(),
+            IdShort = descriptorNode["idShort"]?.GetValue<string>(),
+            Id = descriptorNode["id"]?.GetValue<string>(),
+            SpecificAssetIds = AasJsonNodeDeserializer.DeserializeAasArray(descriptorNode["specificAssetIds"], Jsonization.Deserialize.SpecificAssetIdFrom),
+            SubmodelDescriptors = descriptorNode["submodelDescriptors"]?.Deserialize<List<SubmodelDescriptor>>()
+        };
+    }
+
+    private static void UpdateSubmodelTemplateKind(ISubmodel submodel) => submodel.Kind = ModellingKind.Instance;
 }

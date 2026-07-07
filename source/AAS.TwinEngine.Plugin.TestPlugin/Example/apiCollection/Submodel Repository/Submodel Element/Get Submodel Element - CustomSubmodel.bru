@@ -1,0 +1,21 @@
+meta {
+  name: Get Submodel Element - CustomSubmodel
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{DataEngineBaseUrl}}/submodels/:submodelIdentifier/submodel-elements/:idShortPath
+  body: none
+  auth: inherit
+}
+
+params:path {
+  submodelIdentifier: {{submodelIdentifierCustomSubmodel}}
+  idShortPath: OperatingConditionsOfReliabilityCharacteristics
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

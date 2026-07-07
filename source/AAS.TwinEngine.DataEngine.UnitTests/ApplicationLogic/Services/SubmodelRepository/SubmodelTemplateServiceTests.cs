@@ -4,12 +4,14 @@ using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Providers;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRepository;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
+
+using Microsoft.Extensions.Logging;
 
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
-using File = AasCore.Aas3_0.File;
+using File = AasCore.Aas3_1.File;
 
 namespace AAS.TwinEngine.DataEngine.UnitTests.ApplicationLogic.Services.SubmodelRepository;
 
@@ -17,28 +19,27 @@ public class SubmodelTemplateServiceTests
 {
     private readonly ITemplateProvider _templateProvider = Substitute.For<ITemplateProvider>();
     private readonly ISubmodelTemplateMappingProvider _mappingProvider = Substitute.For<ISubmodelTemplateMappingProvider>();
+    private readonly ILogger<SubmodelTemplateService> _logger = Substitute.For<ILogger<SubmodelTemplateService>>();
     private readonly SubmodelTemplateService _sut;
     private const string SubmodelId = "Nameplate";
     private const string TemplateId = "template-Nameplate";
 
-    public SubmodelTemplateServiceTests() => _sut = new SubmodelTemplateService(_templateProvider, _mappingProvider);
+    public SubmodelTemplateServiceTests() => _sut = new SubmodelTemplateService(_templateProvider, _mappingProvider, _logger);
 
     [Fact]
-    public void Constructor_ThrowsArgumentNullException_WhenTemplateProviderIsNull()
+    public void Constructor_ThrowsInvalidDependencyException_WhenTemplateProviderIsNull()
     {
         ITemplateProvider? templateProvider = null;
 
-        var ex = Assert.Throws<ArgumentNullException>(() => new SubmodelTemplateService(templateProvider!, _mappingProvider));
-        Assert.Equal("templateProvider", ex.ParamName);
+        var ex = Assert.Throws<InvalidDependencyException>(() => new SubmodelTemplateService(templateProvider!, _mappingProvider, _logger));
     }
 
     [Fact]
-    public void Constructor_ThrowsArgumentNullException_WhenTemplateMappingProviderIsNull()
+    public void Constructor_ThrowsInvalidDependencyException_WhenTemplateMappingProviderIsNull()
     {
         ISubmodelTemplateMappingProvider? templateMappingProvider = null;
 
-        var ex = Assert.Throws<ArgumentNullException>(() => new SubmodelTemplateService(_templateProvider, templateMappingProvider!));
-        Assert.Equal("submodelTemplateMappingProvider", ex.ParamName);
+        var ex = Assert.Throws<InvalidDependencyException>(() => new SubmodelTemplateService(_templateProvider, templateMappingProvider!, _logger));
     }
 
     [Fact]

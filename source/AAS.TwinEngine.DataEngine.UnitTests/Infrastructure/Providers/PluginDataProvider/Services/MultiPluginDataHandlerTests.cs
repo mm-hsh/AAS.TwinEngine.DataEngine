@@ -1,9 +1,9 @@
 ﻿using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Application;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
-using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRepository.Config;
 using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRepository;
 using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Services;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,10 +19,10 @@ public class MultiPluginDataHandlerTests
 
     public MultiPluginDataHandlerTests()
     {
-        var semantics = Substitute.For<IOptions<Semantics>>();
+        var pluginsConfig = Substitute.For<IOptions<PluginsConfig>>();
         _logger = Substitute.For<ILogger<MultiPluginDataHandler>>();
-        semantics.Value.Returns(new Semantics { SubmodelElementIndexContextPrefix = "_index_" });
-        _sut = new MultiPluginDataHandler(semantics, _logger);
+        pluginsConfig.Value.Returns(new PluginsConfig { SubmodelElementIndexContextPrefix = "_index_" });
+        _sut = new MultiPluginDataHandler(pluginsConfig, _logger);
     }
 
     [Fact]
@@ -66,14 +66,14 @@ public class MultiPluginDataHandlerTests
             {
                 PluginName = "TestPlugin1",
                 PluginUrl = new Uri("https://example.com/plugin1"),
-                SupportedSemanticIds = new List<string> { "abc" },
+                SupportedSemanticIds = ["abc"],
                 Capabilities = new Capabilities { HasShellDescriptor = true }
             },
             new()
             {
                 PluginName = "TestPlugin2",
                 PluginUrl = new Uri("https://example.com/plugin2"),
-                SupportedSemanticIds = new List<string> { "def" },
+                SupportedSemanticIds = ["def"],
                 Capabilities = new Capabilities { HasShellDescriptor = false }
             }
         };
@@ -86,9 +86,7 @@ public class MultiPluginDataHandlerTests
     }
 
     [Theory]
-    [InlineData(Cardinality.ZeroToOne)]
     [InlineData(Cardinality.One)]
-    [InlineData(Cardinality.ZeroToMany)]
     [InlineData(Cardinality.OneToMany)]
     public void SplitByPluginManifests_ShouldThrow_WhenRequiredSemanticIdNotSupported(Cardinality cardinality)
     {
@@ -103,14 +101,14 @@ public class MultiPluginDataHandlerTests
             {
                 PluginName = "TestPlugin1",
                 PluginUrl = new Uri("https://example.com/plugin1"),
-                SupportedSemanticIds = new List<string> { "xyz" },
+                SupportedSemanticIds = ["xyz"],
                 Capabilities = new Capabilities { HasShellDescriptor = false }
             },
             new()
             {
                 PluginName = "TestPlugin2",
                 PluginUrl = new Uri("https://example.com/plugin2"),
-                SupportedSemanticIds = new List<string> { "def" },
+                SupportedSemanticIds = ["def"],
                 Capabilities = new Capabilities { HasShellDescriptor = false }
             }
         };
@@ -139,14 +137,14 @@ public class MultiPluginDataHandlerTests
             {
                 PluginName = "TestPlugin1",
                 PluginUrl = new Uri("https://example.com/plugin1"),
-                SupportedSemanticIds = new List<string> { "abc" },
+                SupportedSemanticIds = ["abc"],
                 Capabilities = new Capabilities { HasShellDescriptor = true }
             },
             new()
             {
                 PluginName = "TestPlugin2",
                 PluginUrl = new Uri("https://example.com/plugin2"),
-                SupportedSemanticIds = new List<string> { "xyz" },
+                SupportedSemanticIds = ["xyz"],
                 Capabilities = new Capabilities { HasShellDescriptor = false }
             }
         };
@@ -164,7 +162,7 @@ public class MultiPluginDataHandlerTests
         var globalLeaf = new SemanticLeafNode("abc", null!, DataType.String, Cardinality.ZeroToOne);
         var valueLeaf = new SemanticLeafNode("abc", "value1", DataType.String, Cardinality.ZeroToOne);
 
-        var result = _sut.Merge(globalLeaf, new List<SemanticTreeNode> { valueLeaf });
+        var result = _sut.Merge(globalLeaf, [valueLeaf]);
 
         var merged = Assert.IsType<SemanticLeafNode>(result);
         Assert.Equal("value1", merged.Value);
@@ -223,7 +221,7 @@ public class MultiPluginDataHandlerTests
         var valueBranch = new SemanticBranchNode("branch", Cardinality.ZeroToOne);
         valueBranch.AddChild(new SemanticLeafNode("leaf", "val", DataType.String, Cardinality.One));
 
-        var result = _sut.Merge(globalBranch, new List<SemanticTreeNode> { valueBranch });
+        var result = _sut.Merge(globalBranch, [valueBranch]);
 
         var merged = Assert.IsType<SemanticBranchNode>(result);
         Assert.Single(merged.Children);
@@ -247,7 +245,7 @@ public class MultiPluginDataHandlerTests
         valueParentBranch2.AddChild(valueBranch2);
         valueBranch2.AddChild(new SemanticLeafNode("leaf", "v2", DataType.String, Cardinality.One));
 
-        var result = _sut.Merge(valueParentBranch1, new List<SemanticTreeNode> { valueParentBranch1, valueParentBranch2 });
+        var result = _sut.Merge(valueParentBranch1, [valueParentBranch1, valueParentBranch2]);
 
         var merged = Assert.IsType<SemanticBranchNode>(result);
         Assert.Equal(2, merged.Children.Count);
@@ -261,7 +259,7 @@ public class MultiPluginDataHandlerTests
 
         var valueTree = new SemanticBranchNode("root", Cardinality.One);
 
-        var result = _sut.Merge(global, new List<SemanticTreeNode> { valueTree });
+        var result = _sut.Merge(global, [valueTree]);
 
         var merged = Assert.IsType<SemanticBranchNode>(result);
         Assert.Equal("branch", merged.SemanticId);
@@ -282,7 +280,7 @@ public class MultiPluginDataHandlerTests
         candidate.AddChild(new SemanticLeafNode("leaf", "v2", DataType.String, Cardinality.One));
         valueParent.AddChild(candidate);
 
-        var result = _sut.Merge(globalParent, new List<SemanticTreeNode> { valueParent });
+        var result = _sut.Merge(globalParent, [valueParent]);
 
         var mergedParent = Assert.IsType<SemanticBranchNode>(result);
         var mergedBranch = Assert.IsType<SemanticBranchNode>(mergedParent.Children[0]);
@@ -305,7 +303,7 @@ public class MultiPluginDataHandlerTests
         valueParent.AddChild(candidate1);
         valueParent.AddChild(candidate2);
 
-        var result = _sut.Merge(globalParent, new List<SemanticTreeNode> { valueParent });
+        var result = _sut.Merge(globalParent, [valueParent]);
 
         var mergedParent = Assert.IsType<SemanticBranchNode>(result);
         Assert.Equal(2, mergedParent.Children.Count);
@@ -327,7 +325,7 @@ public class MultiPluginDataHandlerTests
         valueParent.AddChild(candidate1);
         valueParent.AddChild(candidate2);
 
-        var result = _sut.Merge(globalParent, new List<SemanticTreeNode> { valueParent });
+        var result = _sut.Merge(globalParent, [valueParent]);
 
         var mergedParent = Assert.IsType<SemanticBranchNode>(result);
         Assert.Equal(2, mergedParent.Children.Count);
@@ -349,7 +347,7 @@ public class MultiPluginDataHandlerTests
         valueParent.AddChild(candidate1);
         valueParent.AddChild(candidate2);
 
-        var result = _sut.Merge(globalParent, new List<SemanticTreeNode> { valueParent });
+        var result = _sut.Merge(globalParent, [valueParent]);
 
         var mergedParent = Assert.IsType<SemanticBranchNode>(result);
         var mergedBranch = Assert.IsType<SemanticBranchNode>(mergedParent.Children[0]);
@@ -362,7 +360,7 @@ public class MultiPluginDataHandlerTests
         var dummyNode = new DummyNode("x", Cardinality.One);
 
         Assert.Throws<InternalDataProcessingException>(() =>
-            _sut.Merge(dummyNode, new List<SemanticTreeNode>()));
+            _sut.Merge(dummyNode, []));
     }
 
     private class DummyNode(string semanticId, Cardinality cardinality) : SemanticTreeNode(semanticId, cardinality);

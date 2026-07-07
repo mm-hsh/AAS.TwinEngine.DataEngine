@@ -1,9 +1,9 @@
 ﻿using System.Text.Json;
 
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Application;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Extensions;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
-using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Config;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Helper;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Providers;
 using AAS.TwinEngine.DataEngine.DomainModel.AasRegistry;
@@ -12,6 +12,9 @@ using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRepository;
 using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Helper;
 using AAS.TwinEngine.DataEngine.Infrastructure.Shared;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
+
+using AasCore.Aas3_1;
 
 using Json.Schema;
 
@@ -23,12 +26,13 @@ public class PluginDataHandler(
     IPluginRequestBuilder pluginRequestBuilder,
     IPluginDataProvider pluginDataProvider,
     IJsonSchemaValidator jsonSchemaValidator,
-    IOptions<AasEnvironmentConfig> aasEnvironment,
     IMultiPluginDataHandler multiPluginDataHandler,
-    ILogger<PluginDataHandler> logger) : IPluginDataHandler
+    ILogger<PluginDataHandler> logger,
+    IOptions<GeneralConfig> generalConfig) : IPluginDataHandler
 {
-    private readonly Uri _dataEngineRepositoryBaseUrl = aasEnvironment.Value.DataEngineRepositoryBaseUrl ?? throw new ArgumentNullException(nameof(aasEnvironment), "DataEngineRepositoryBaseUrl is required.");
     private const string ShellsBasePath = "shells";
+
+    private readonly Uri _baseUrl = generalConfig.Value.DataEngineRepositoryBaseUrl ?? throw new InvalidDependencyException(nameof(generalConfig.Value.DataEngineRepositoryBaseUrl), logger);
 
     public async Task<SemanticTreeNode> TryGetValuesAsync(IReadOnlyList<PluginManifest> pluginManifests, SemanticTreeNode semanticIds, string submodelId, CancellationToken cancellationToken)
     {
@@ -77,9 +81,9 @@ public class PluginDataHandler(
 
         const string Url = $"{ShellsBasePath}";
 
-        for (var i = 0; i < response.Count; i++)
+        foreach (var shellDiscriptor in response)
         {
-            var responseContent = await response[i].ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var responseContent = await shellDiscriptor.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -90,11 +94,28 @@ public class PluginDataHandler(
                     throw new ResponseParsingException();
                 }
 
-                SetHref(shellDescriptorData.ShellDescriptors);
+                var shellDescriptors = shellDescriptorData.ShellDescriptors ?? [];
+
+                var invalidDescriptors = shellDescriptors
+                                         .Where(x => string.IsNullOrWhiteSpace(x.Id))
+                                         .Select(x => new
+                                         {
+                                             IdShort = x.IdShort ?? "<null>",
+                                             GlobalAssetId = x.GlobalAssetId ?? "<null>"
+                                         })
+                                         .ToList();
+
+                if (invalidDescriptors.Count > 0)
+                {
+                    logger.LogError("Invalid shell descriptor metadata response. {InvalidCount} descriptor(s) contain null or empty id. Invalid descriptors (IdShort/GlobalAssetId): {@InvalidDescriptors}", invalidDescriptors.Count, invalidDescriptors);
+                    throw new ValidationFailedException();
+                }
+
+                SetHref(shellDescriptors);
 
                 result.PagingMetaData = shellDescriptorData.PagingMetaData;
 
-                result.ShellDescriptors.AddRange(shellDescriptorData.ShellDescriptors);
+                result.ShellDescriptors?.AddRange(shellDescriptors);
             }
             catch (JsonException)
             {
@@ -116,15 +137,21 @@ public class PluginDataHandler(
 
         var url = $"{ShellsBasePath}/{id.EncodeBase64Url()}";
 
-        for (var i = 0; i < response.Count; i++)
+        foreach (var shellDescriptor in response)
         {
-            var responseContent = await response[i].ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var responseContent = await shellDescriptor.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
-                var shellDescriptorData = JsonSerializer.Deserialize<ShellDescriptorMetaData>(responseContent);
+                var shellDescriptorData = JsonSerializer.Deserialize<ShellDescriptorMetaData>(responseContent, JsonSerializationOptions.DeserializationOption);
                 if (shellDescriptorData != null)
                 {
+                    if (string.IsNullOrWhiteSpace(shellDescriptorData.Id))
+                    {
+                        logger.LogError("Invalid shell descriptor metadata response for requested id {RequestedId}. Descriptor id is null or empty in response.", id);
+                        throw new ValidationFailedException();
+                    }
+
                     SetHref(shellDescriptorData);
                     return shellDescriptorData;
                 }
@@ -150,9 +177,9 @@ public class PluginDataHandler(
 
         var url = $"assets/{id.EncodeBase64Url()}";
 
-        for (var i = 0; i < response.Count; i++)
+        foreach (var assetInfo in response)
         {
-            var responseContent = await response[i].ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var responseContent = await assetInfo.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -173,6 +200,57 @@ public class PluginDataHandler(
         throw new ResponseParsingException();
     }
 
+    public async Task<ShellDescriptorsMetaData> GetDataForShellsByAssetIdsAsync(IReadOnlyList<PluginManifest> pluginManifests, IList<SpecificAssetId> specificAssetIds, CancellationToken cancellationToken)
+    {
+        var availablePlugins = multiPluginDataHandler.GetAvailablePlugins(pluginManifests, c => c.HasAssetIdSearch == true);
+
+        if (availablePlugins.Count == 0)
+        {
+            logger.LogWarning("No plugins available that support asset ID search.");
+            throw new PluginCapabilityNotSupportedException();
+        }
+
+        var pluginRequests = pluginRequestBuilder.Build(availablePlugins);
+
+        var assetIdsHeaderValue = JsonSerializer.Serialize(
+                                                           specificAssetIds.Select(x => new
+                                                           {
+                                                               name = x.Name,
+                                                               value = x.Value
+                                                           }));
+
+        var response = await pluginDataProvider.GetDataForShellDescriptorsByAssetIdsAsync(pluginRequests, assetIdsHeaderValue, cancellationToken).ConfigureAwait(false);
+
+        var result = new ShellDescriptorsMetaData();
+
+        foreach (var shellDescriptor in response)
+        {
+            var responseContent = await shellDescriptor.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                var shellDescriptorData = JsonSerializer.Deserialize<ShellDescriptorsMetaData>(responseContent, JsonSerializationOptions.DeserializationOption);
+                if (shellDescriptorData == null)
+                {
+                    logger.LogError("Failed to deserialize ShellDescriptorData from asset ID search. Response content: {Content}", responseContent);
+                    throw new ResponseParsingException();
+                }
+
+                var shellDescriptors = shellDescriptorData.ShellDescriptors ?? [];
+                SetHref(shellDescriptors);
+                result.PagingMetaData = shellDescriptorData.PagingMetaData;
+                result.ShellDescriptors?.AddRange(shellDescriptors);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogError(ex, "Invalid response format from asset ID search.");
+                throw new ResponseParsingException();
+            }
+        }
+
+        return result;
+    }
+
     private void SetHref(IList<ShellDescriptorMetaData> values)
     {
         foreach (var value in values)
@@ -183,7 +261,7 @@ public class PluginDataHandler(
 
     private void SetHref(ShellDescriptorMetaData value)
     {
-        var encodedId = value.Id!.EncodeBase64Url();
-        value.Href = $"{_dataEngineRepositoryBaseUrl}{ShellsBasePath}/{encodedId}";
+        var encodedId = value.Id.EncodeBase64Url();
+        value.Href = $"{_baseUrl}{ShellsBasePath}/{encodedId}";
     }
 }

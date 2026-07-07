@@ -2,7 +2,9 @@
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
+
+using UnauthorizedAccessException = AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure.UnauthorizedAccessException;
 
 namespace AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRepository;
 
@@ -58,6 +60,10 @@ public class SubmodelRepositoryService(
         catch (ResourceNotFoundException ex)
         {
             throw new SubmodelNotFoundException(ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new ServiceUnAuthorizedException(ex);
         }
         catch (ResponseParsingException ex)
         {

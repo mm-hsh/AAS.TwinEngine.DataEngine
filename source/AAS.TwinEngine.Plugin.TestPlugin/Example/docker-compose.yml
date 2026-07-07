@@ -4,7 +4,7 @@ networks:
 
 services:
   nginx:
-    image: nginx:latest
+    image: nginx:1.31.2
     container_name: nginx
     ports:
       - "8080:80"
@@ -15,7 +15,7 @@ services:
     depends_on:
       aas-template-registry:
         condition: service_healthy
-      sm-template-regisry:
+      sm-template-registry:
         condition: service_healthy
       template-repository:
         condition: service_healthy
@@ -31,39 +31,62 @@ services:
     - '8085:8080'
     container_name: twinengine-dataengine
     depends_on:
-      - mongo
+      twinengine-plugin:
+        condition: service_started
     restart: always
     environment:
-      - AasEnvironment__DataEngineRepositoryBaseUrl=http://localhost:8080
-      - AasEnvironment__AasEnvironmentRepositoryBaseUrl=http://template-repository:8081
-      - AasEnvironment__SubModelRepositoryPath=submodels
-      - AasEnvironment__AasRegistryBaseUrl=http://aas-template-registry:8080
-      - AasEnvironment__AasRegistryPath=shell-descriptors
-      - AasEnvironment__SubModelRegistryBaseUrl=http://sm-template-regisry:8080
-      - AasEnvironment__SubModelRegistryPath=submodel-descriptors
-      - AasEnvironment__AasRepositoryPath=shells
-      - AasEnvironment__SubmodelRefPath=submodel-refs
-      - AasEnvironment__CustomerDomainUrl=https://mm-software.com
-      - TemplateMappingRules__SubmodelTemplateMappings__0__templateId=https://admin-shell.io/idta/SubmodelTemplate/Reliability/1/0
-      - TemplateMappingRules__SubmodelTemplateMappings__0__pattern__0=Reliability
-      - TemplateMappingRules__SubmodelTemplateMappings__1__templateId=https://admin-shell.io/idta/SubmodelTemplate/DigitalNameplate/3/0
-      - TemplateMappingRules__SubmodelTemplateMappings__1__pattern__0=Nameplate
-      - TemplateMappingRules__SubmodelTemplateMappings__2__templateId=https://admin-shell.io/idta/SubmodelTemplate/ContactInformation/1/0
-      - TemplateMappingRules__SubmodelTemplateMappings__2__pattern__0=ContactInformation
-      - TemplateMappingRules__ShellTemplateMappings__0__templateId=https://mm-software.com/aas/aasTemplate
-      - TemplateMappingRules__ShellTemplateMappings__0__pattern__0=
-      - TemplateMappingRules__AasIdExtractionRules__0__pattern=Regex
-      - TemplateMappingRules__AasIdExtractionRules__0__index=6
-      - TemplateMappingRules__AasIdExtractionRules__0__separator=/
-      - Semantics__MultiLanguageSemanticPostfixSeparator=_
-      - Semantics__SubmodelElementIndexContextPrefix=_aastwinengineindex_
-      - Semantics__InternalSemanticId=InternalSemanticId
-      - AasxOptions__RootFolder=aasx
-      - AasRegistryPreComputed__ShellDescriptorCron=0 */3 * * * *
-      - AasRegistryPreComputed__IsPreComputed=false
-      - MultiPluginConflictOption__HandlingMode=TakeFirst
-      - PluginConfig__Plugins__0__PluginName=Plugin
-      - PluginConfig__Plugins__0__PluginUrl=http://twinengine-plugin:8080
+      - General__DataEngineRepositoryBaseUrl=http://localhost:8080
+      - General__CustomerDomainUrl=https://mm-software.com
+      - Plugins__Instances__0__Name=TestPlugin
+      - Plugins__Instances__0__baseUrl=http://twinengine-plugin:8080
+      - Plugins__Instances__0__healthEndpoint=/healthz
+      - Plugins__Instances__0__headerMappings__0__source=Authorization
+      - Plugins__Instances__0__headerMappings__0__target=X-Auth-Token
+      - Plugins__Instances__0__headerMappings__0__required=false
+      - Plugins__Instances__0__headerMappings__1__source=X-Organization-Id
+      - Plugins__Instances__0__headerMappings__1__target=X-Tenant-Context
+      - Plugins__Instances__0__headerMappings__1__required=false
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__0__templateId=https://admin-shell.io/idta/SubmodelTemplate/HandoverDocumentation/2/0
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__0__pattern__0=HandoverDocumentation
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__1__templateId=https://admin-shell.io/idta/SubmodelTemplate/ContactInformation/1/0
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__1__pattern__0=ContactInformation
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__templateId=https://admin-shell.io/idta/CustomSubmodel/Template/0/1
+      - TemplateManagement__TemplateMappingRules__SubmodelTemplateMappings__2__pattern__0=CustomSubmodel
+      - TemplateManagement__TemplateMappingRules__ShellTemplateMappings__0__templateId=https://mm-software.com/aas/aasTemplate
+      - TemplateManagement__TemplateMappingRules__ShellTemplateMappings__0__pattern__0=.+
+      - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Strategy=Split
+      - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Pattern=/
+      - TemplateManagement__TemplateMappingRules__AasIdExtractionRules__0__Index=5
+      - TemplateManagement__AasTemplateRepository__Name=AasTemplateRepository
+      - TemplateManagement__AasTemplateRepository__baseUrl=http://template-repository:8081
+      - TemplateManagement__AasTemplateRepository__healthEndpoint=/actuator/health
+      - TemplateManagement__AasTemplateRepository__headerMappings__0__source=Authorization
+      - TemplateManagement__AasTemplateRepository__headerMappings__0__target=Authorization
+      - TemplateManagement__AasTemplateRepository__headerMappings__0__required=false
+      - TemplateManagement__SubmodelTemplateRepository__Name=SubmodelTemplateRepository
+      - TemplateManagement__SubmodelTemplateRepository__baseUrl=http://template-repository:8081
+      - TemplateManagement__SubmodelTemplateRepository__healthEndpoint=/actuator/health
+      - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__source=Authorization
+      - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__target=Authorization
+      - TemplateManagement__SubmodelTemplateRepository__headerMappings__0__required=false
+      - TemplateManagement__ConceptDescriptionTemplateRepository__Name=ConceptDescriptionTemplateRepository
+      - TemplateManagement__ConceptDescriptionTemplateRepository__baseUrl=http://template-repository:8081
+      - TemplateManagement__ConceptDescriptionTemplateRepository__healthEndpoint=/actuator/health
+      - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__source=Authorization
+      - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__target=Authorization
+      - TemplateManagement__ConceptDescriptionTemplateRepository__headerMappings__0__required=false
+      - TemplateManagement__AasTemplateRegistry__Name=AasTemplateRegistry
+      - TemplateManagement__AasTemplateRegistry__baseUrl=http://aas-template-registry:8080
+      - TemplateManagement__AasTemplateRegistry__healthEndpoint=/actuator/health
+      - TemplateManagement__AasTemplateRegistry__headerMappings__0__source=Authorization
+      - TemplateManagement__AasTemplateRegistry__headerMappings__0__target=Authorization
+      - TemplateManagement__AasTemplateRegistry__headerMappings__0__required=false
+      - TemplateManagement__SubmodelTemplateRegistry__Name=SubmodelTemplateRegistry
+      - TemplateManagement__SubmodelTemplateRegistry__baseUrl=http://sm-template-registry:8080
+      - TemplateManagement__SubmodelTemplateRegistry__healthEndpoint=/actuator/health
+      - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__source=Authorization
+      - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__target=Authorization
+      - TemplateManagement__SubmodelTemplateRegistry__headerMappings__0__required=false
     networks:
       - dataengine-network
 
@@ -84,11 +107,12 @@ services:
       - Semantics__IndexContextPrefix=_aastwinengineindex_
       - Capabilities__HasShellDescriptor=true
       - Capabilities__HasAssetInformation=true
+      - Capabilities__HasAssetIdSearch=true
     networks:
       - dataengine-network
 
   template-repository:
-    image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
+    image: eclipsebasyx/aas-environment:2.0.0-milestone-11
     container_name: template-repository
     ports:
       - "8081:8081"
@@ -101,13 +125,13 @@ services:
     depends_on:
       aas-template-registry:
         condition: service_healthy
-      sm-template-regisry:
+      sm-template-registry:
         condition: service_healthy
     networks:
       - dataengine-network
 
   aas-template-registry:
-    image: eclipsebasyx/aas-registry-log-mongodb:2.0.0-SNAPSHOT
+    image: eclipsebasyx/aas-registry-log-mongodb:2.0.0-milestone-11
     container_name: aas-template-registry
     ports:
       - '8082:8080'
@@ -119,9 +143,9 @@ services:
     networks:
       - dataengine-network
 
-  sm-template-regisry:
-    image: eclipsebasyx/submodel-registry-log-mongodb:2.0.0-SNAPSHOT
-    container_name: sm-template-regisry
+  sm-template-registry:
+    image: eclipsebasyx/submodel-registry-log-mongodb:2.0.0-milestone-11
+    container_name: sm-template-registry
     ports:
       - '8083:8080'
     depends_on:
@@ -131,27 +155,8 @@ services:
     networks:
       - dataengine-network
 
-  shell-template-creator:
-    image: curlimages/curl:latest
-    container_name: shell-template-creator
-    depends_on:
-      template-repository:
-        condition: service_healthy
-    entrypoint: >
-      sh -c '
-        echo "Waiting for template-repository to be ready...";
-        sleep 10;
-        curl -X POST http://template-repository:8081/shells \
-          -H "accept: application/json" \
-          -H "Content-Type: application/json" \
-          -d "{\"id\": \"https://mm-software.com/aas/aasTemplate\", \"assetInformation\": {\"assetKind\": \"Instance\"}, \"submodels\": [{\"type\": \"ModelReference\", \"keys\": [{\"type\": \"Submodel\", \"value\": \"Nameplate\"}]}, {\"type\": \"ModelReference\", \"keys\": [{\"type\": \"Submodel\", \"value\": \"ContactInformation\"}]}, {\"type\": \"ModelReference\", \"keys\": [{\"type\": \"Submodel\", \"value\": \"Reliability\"}]}], \"modelType\": \"AssetAdministrationShell\"}";
-        echo "Shell creation request sent.";
-      '
-    networks:
-      - dataengine-network
-
   aas-web-ui:
-    image: eclipsebasyx/aas-gui:SNAPSHOT
+    image: eclipsebasyx/aas-gui:v2-260526
     container_name: aas-ui
     volumes:
       - ./logo:/usr/src/app/dist/Logo
@@ -163,8 +168,11 @@ services:
       CD_REPO_PATH: http://localhost:8080/concept-descriptions
       BASE_PATH: "/aas-ui"
       LOGO_PATH: "MM_Logo.svg"
-      PRIMARY_DARK_COLOR: "#EBECED"
-      PRIMARY_LIGHT_COLOR: "#00F2E5"
+      PRIMARY_DARK_COLOR: "#00F2E5"
+      PRIMARY_LIGHT_COLOR: "#041b2b"
+      ALLOW_EDITING: "false"
+      SM_VIEWER_EDITOR: "false"
+      ALLOW_UPLOADING: "false"
     restart: always
     depends_on:
       template-repository:
@@ -173,11 +181,10 @@ services:
       - dataengine-network
 
   mongo:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: mongo
     environment:
       MONGO_INITDB_ROOT_USERNAME: mongoAdmin
       MONGO_INITDB_ROOT_PASSWORD: mongoPassword
     networks:
       - dataengine-network
-

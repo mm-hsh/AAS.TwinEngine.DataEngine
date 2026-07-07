@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json.Nodes;
 
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
@@ -7,42 +8,49 @@ using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.AasEnvironment.Provide
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Providers;
 using AAS.TwinEngine.DataEngine.Infrastructure.Http.Clients;
-using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Config;
+using AAS.TwinEngine.DataEngine.ModuleTests.Common;
 
-using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
+
 namespace AAS.TwinEngine.DataEngine.ModuleTests.Api.Services.SubmodelRepository;
 
-public class SubmodelRepositoryControllerTests : IClassFixture<WebApplicationFactory<Program>>
+public abstract class SubmodelRepositoryControllerTests : IDisposable
 {
+    private readonly ConfigTestFactory _factory;
     private readonly ITemplateProvider _mockTemplateProvider;
     private readonly HttpClient _client;
     private readonly ICreateClient _httpClientFactory;
 
-    public SubmodelRepositoryControllerTests(WebApplicationFactory<Program> factory)
+    protected SubmodelRepositoryControllerTests(string configDir)
     {
         _mockTemplateProvider = Substitute.For<ITemplateProvider>();
         var mockPluginManifestProvider = Substitute.For<IPluginManifestProvider>();
         var mockPluginManifestConflictHandler = Substitute.For<IPluginManifestConflictHandler>();
         _httpClientFactory = Substitute.For<ICreateClient>();
 
-        var factory1 = factory.WithWebHostBuilder(builder =>
+        _factory = new ConfigTestFactory(configDir, services =>
         {
-            _ = builder.ConfigureServices(services =>
-            {
-                _ = services.AddSingleton(_httpClientFactory);
-                _ = services.AddSingleton(_mockTemplateProvider);
-                _ = services.AddSingleton(mockPluginManifestProvider);
-                _ = services.AddSingleton(mockPluginManifestConflictHandler);
-            });
+            _ = services.AddSingleton(_httpClientFactory);
+            _ = services.AddSingleton(_mockTemplateProvider);
+            _ = services.AddSingleton(mockPluginManifestProvider);
+            _ = services.AddSingleton(mockPluginManifestConflictHandler);
         });
 
-        _client = factory1.CreateClient();
+        _client = _factory.CreateClient();
         _ = mockPluginManifestConflictHandler.Manifests.Returns(TestData.CreatePluginManifests());
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     [Fact]
@@ -67,27 +75,27 @@ public class SubmodelRepositoryControllerTests : IClassFixture<WebApplicationFac
         using var httpClientPlugin2 = new HttpClient(messageHandlerPlugin2);
         httpClientPlugin2.BaseAddress = new Uri("https://testendpoint2.com");
 
-        const string HttpClientNamePlugin1 = $"{PluginConfig.HttpClientNamePrefix}TestPlugin1";
+        const string HttpClientNamePlugin1 = $"{HttpClientNames.PluginDataProviderPrefix}TestPlugin1";
         _ = _httpClientFactory.CreateClient(HttpClientNamePlugin1).Returns(httpClientPlugin1);
 
-        const string HttpClientNamePlugin2 = $"{PluginConfig.HttpClientNamePrefix}TestPlugin2";
-        _httpClientFactory.CreateClient(HttpClientNamePlugin2).Returns(httpClientPlugin2);
+        const string HttpClientNamePlugin2 = $"{HttpClientNames.PluginDataProviderPrefix}TestPlugin2";
+        _ = _httpClientFactory.CreateClient(HttpClientNamePlugin2).Returns(httpClientPlugin2);
 
-        var submodelId = "Q29udGFjdEluZm9ybWF0aW9u";
+        const string SubmodelId = "Q29udGFjdEluZm9ybWF0aW9u";
         var mockSubmodel = TestData.CreateSubmodel();
 
         _ = _mockTemplateProvider.GetSubmodelTemplateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(mockSubmodel);
 
         // Act
-        var response = await _client.GetAsync($"/submodels/{submodelId}");
+        var response = await _client.GetAsync($"/submodels/{SubmodelId}");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadFromJsonAsync<JsonObject>();
         Assert.NotNull(json);
-        var submodelResponse = json.ToString();
-        var expectedSubmodel = TestData.CreateSubmodelWithValues();
-        Assert.Equal(submodelResponse, expectedSubmodel);
+        var expectedSubmodel = JsonNode.Parse(TestData.CreateSubmodelWithValues());
+        Assert.NotNull(expectedSubmodel);
+        Assert.True(JsonNode.DeepEquals(json, expectedSubmodel));
     }
 
     [Fact]
@@ -131,7 +139,7 @@ public class SubmodelRepositoryControllerTests : IClassFixture<WebApplicationFac
         const string SubmodelId = "Q29udGFjdEluZm9ybWF0aW9u";
         const string IdShortPath = "ContactName";
         var mockSubmodel = TestData.CreateSubmodel();
-        TestData.CreatePluginResponseForSubmodelElement();
+        _ = TestData.CreatePluginResponseForSubmodelElement();
 
         using var messageHandler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage
         {
@@ -142,13 +150,13 @@ public class SubmodelRepositoryControllerTests : IClassFixture<WebApplicationFac
         using var httpClient = new HttpClient(messageHandler);
         httpClient.BaseAddress = new Uri("https://testendpoint.com");
 
-        const string HttpClientName = $"{PluginConfig.HttpClientNamePrefix}TestPlugin1";
+        const string HttpClientName = $"{HttpClientNames.PluginDataProviderPrefix}TestPlugin1";
         _ = _httpClientFactory.CreateClient(HttpClientName).Returns(httpClient);
 
         _ = _mockTemplateProvider.GetSubmodelTemplateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(mockSubmodel);
 
         // Act
-        var response = await _client.GetAsync($"/submodels/{SubmodelId}/submodel-elements/{IdShortPath}");
+        var response = await _client.GetAsync(CreateSubmodelElementPath(SubmodelId, IdShortPath));
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -192,7 +200,137 @@ public class SubmodelRepositoryControllerTests : IClassFixture<WebApplicationFac
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
+
+    [Theory]
+    [InlineData("../../../etc/passwd")]
+    [InlineData(@"..\..\windows\system32")]
+    [InlineData("element/../otherElement")]
+    [InlineData("%2e%2e/config")]
+    public async Task GetSubmodelElement_PathTraversalInIdShortPath_Returns400BadRequestAsync(string maliciousIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, maliciousIdShortPath));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("<script>alert('xss')</script>")]
+    [InlineData("<img onerror=alert('xss')>")]
+    [InlineData("element<script>alert(1)</script>")]
+    [InlineData("<svg/onload=alert('xss')>")]
+    public async Task GetSubmodelElement_XssInIdShortPath_Returns400BadRequestAsync(string maliciousIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, maliciousIdShortPath));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("' OR '1'='1")]
+    [InlineData("element'; DROP TABLE--")]
+    [InlineData("1 UNION SELECT *")]
+    [InlineData("admin'--")]
+    public async Task GetSubmodelElement_SqlInjectionInIdShortPath_Returns400BadRequestAsync(string maliciousIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, maliciousIdShortPath));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("javascript:alert('xss')")]
+    [InlineData("data:text/html,<script>")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("vbscript:msgbox('xss')")]
+    public async Task GetSubmodelElement_DangerousProtocolInIdShortPath_Returns400BadRequestAsync(string maliciousIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, maliciousIdShortPath));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("element with spaces")]
+    [InlineData("element/slash")]
+    [InlineData("element\\backslash")]
+    [InlineData("element|pipe")]
+    [InlineData("element;semicolon")]
+    public async Task GetSubmodelElement_InvalidCharactersInIdShortPath_Returns400BadRequestAsync(string invalidIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, invalidIdShortPath));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("ContactInformation1")]
+    [InlineData("ManufacturerName")]
+    [InlineData("element.subelement.property")]
+    [InlineData("list[0]")]
+    [InlineData("element[3].property")]
+    [InlineData("collection_item-name")]
+    public async Task GetSubmodelElement_ValidIdShortPath_DoesNotReturn400Async(string validIdShortPath)
+    {
+        var validSubmodelId = EncodeBase64Url("https://example.com/submodels/test");
+        _ = _mockTemplateProvider.GetSubmodelTemplateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        .Throws(new ResourceNotFoundException());
+
+        var response = await _client.GetAsync(CreateSubmodelElementPath(validSubmodelId, validIdShortPath));
+
+        Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("not!!valid")]
+    [InlineData("invalid base64")]
+    public async Task GetSubmodel_InvalidBase64_Returns400BadRequestAsync(string invalidBase64)
+    {
+        var response = await _client.GetAsync($"/submodels/{invalidBase64}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("<svg/onload=alert('xss')>")]
+    [InlineData("1 UNION SELECT * FROM submodels")]
+    [InlineData("javascript:alert(1)")]
+    public async Task GetSubmodel_MaliciousPattern_Returns400BadRequestAsync(string maliciousContent)
+    {
+        var encoded = EncodeBase64Url(maliciousContent);
+
+        var response = await _client.GetAsync($"/submodels/{encoded}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private static string EncodeBase64Url(string plainText)
+    {
+        if (string.IsNullOrWhiteSpace(plainText))
+        {
+            return string.Empty;
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(plainText);
+        return WebEncoders.Base64UrlEncode(bytes);
+    }
+
+    private static string CreateSubmodelElementPath(string submodelIdentifier, string idShortPath)
+        => $"/submodels/{submodelIdentifier}/submodel-elements/{Uri.EscapeDataString(idShortPath)}";
 }
+
+public class SubmodelRepositoryControllerTestsV1Config() : SubmodelRepositoryControllerTests("v1-config");
+
+public class SubmodelRepositoryControllerTestsV2Config() : SubmodelRepositoryControllerTests("v2-config");
 
 public class FakeHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
 {

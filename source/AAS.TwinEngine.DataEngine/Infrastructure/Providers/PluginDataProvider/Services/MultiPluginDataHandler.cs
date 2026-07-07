@@ -1,17 +1,17 @@
 ﻿using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Application;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
-using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.SubmodelRepository.Config;
 using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.DomainModel.SubmodelRepository;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
 using Microsoft.Extensions.Options;
 
 namespace AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Services;
 
-public class MultiPluginDataHandler(IOptions<Semantics> semantics, ILogger<MultiPluginDataHandler> logger) : IMultiPluginDataHandler
+public class MultiPluginDataHandler(IOptions<PluginsConfig> pluginsConfig, ILogger<MultiPluginDataHandler> logger) : IMultiPluginDataHandler
 {
-    private readonly string _submodelElementIndexContextPrefix = semantics.Value.SubmodelElementIndexContextPrefix;
+    private readonly string _submodelElementIndexContextPrefix = pluginsConfig.Value.SubmodelElementIndexContextPrefix;
 
     public IDictionary<string, SemanticTreeNode> SplitByPluginManifests(SemanticTreeNode globalTree, IReadOnlyList<PluginManifest> pluginManifests)
     {
@@ -43,9 +43,7 @@ public class MultiPluginDataHandler(IOptions<Semantics> semantics, ILogger<Multi
 
         var missingSemanticIds = allSemanticNodes
             .Where(node =>
-                (node.Cardinality == Cardinality.ZeroToOne ||
-                 node.Cardinality == Cardinality.One ||
-                 node.Cardinality == Cardinality.ZeroToMany ||
+                (node.Cardinality == Cardinality.One ||
                  node.Cardinality == Cardinality.OneToMany) && !allSupportedSemanticIds.Contains(GetSemanticId(node.SemanticId)))
             .Select(node => node.SemanticId)
             .ToList();
@@ -151,7 +149,7 @@ public class MultiPluginDataHandler(IOptions<Semantics> semantics, ILogger<Multi
                     break;
 
                 case SemanticLeafNode childLeaf:
-                    var mergedLeaf = MergeLeafNode(childLeaf, matchingNodes.OfType<SemanticLeafNode>().ToList());
+                    var mergedLeaf = MergeLeafNode(childLeaf, [.. matchingNodes.OfType<SemanticLeafNode>()]);
                     if (mergedLeaf != null)
                     {
                         mergedBranch.AddChild(mergedLeaf);
@@ -165,7 +163,7 @@ public class MultiPluginDataHandler(IOptions<Semantics> semantics, ILogger<Multi
     }
 
     private static SemanticTreeNode MergeLeaf(SemanticLeafNode leaf, IList<SemanticTreeNode> valueTrees)
-        => MergeLeafNode(leaf, valueTrees.OfType<SemanticLeafNode>().ToList()) ?? throw new InternalDataProcessingException();
+        => MergeLeafNode(leaf, [.. valueTrees.OfType<SemanticLeafNode>()]) ?? throw new InternalDataProcessingException();
 
     private static List<SemanticTreeNode> MergeBranchNodes(SemanticBranchNode template, List<SemanticTreeNode> candidates)
     {
@@ -274,8 +272,7 @@ public class MultiPluginDataHandler(IOptions<Semantics> semantics, ILogger<Multi
     }
 
     public IList<string> GetAvailablePlugins(IReadOnlyList<PluginManifest> manifests, Func<Capabilities, bool> capabilitySelector)
-        => manifests
+        => [.. manifests
             .Where(m => capabilitySelector(m.Capabilities))
-            .Select(m => m.PluginName)
-            .ToList();
+            .Select(m => m.PluginName)];
 }

@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-using AasCore.Aas3_0;
+using AasCore.Aas3_1;
 
 namespace AAS.TwinEngine.DataEngine.DomainModel.AasRegistry;
 
@@ -13,7 +13,7 @@ public class ShellDescriptorMetaData
     public string? IdShort { get; set; }
 
     [JsonPropertyName("id")]
-    public string? Id { get; set; }
+    public required string Id { get; set; }
 
     [JsonPropertyName("specificAssetIds")]
     public IList<SpecificAssetId>? SpecificAssetIds { get; init; }

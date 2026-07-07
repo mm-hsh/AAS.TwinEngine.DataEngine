@@ -2,7 +2,7 @@
 
 [![Made by M&M Software](https://img.shields.io/badge/Made_by_M%26M_Software-364955?style=flat-square)](https://www.mm-software.com/)
 [![Apache License](https://img.shields.io/badge/License-Apache-364955.svg?style=flat-square)](https://www.apache.org/licenses/)
-[![.NET 8.0](https://img.shields.io/badge/.NET-8.0-512BD4)](https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-10.0&WT.mc_id=dotnet-35129-website) 
+[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-512BD4)](https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-10.0)
 
 ## Overview
 
@@ -56,7 +56,7 @@ sequenceDiagram
     C-->>B: Submodel Template (Semantic IDs)
     B->>B: Extract semantic IDs
     B->>D: POST /data/{submodelId}
-    D-->D: Resolve semantic IDs
+    D-->>D: Resolve semantic IDs
     D-->>B: Semantic Id with Values
     B->>B: Populate Template
     B-->>A: Filled submodel
@@ -68,7 +68,7 @@ The DataEngine transforms **static AAS templates** into **live digital represent
 
 When a client requests AAS data (shell descriptor, submodel, or submodel element):
 
-1. **Fetch Template** - DataEngine retrieves the required AAS/Submodel template from the AAS Template Registry  
+1. **Fetch Template** - DataEngine retrieves the required AAS/Submodel template from the Template Registry/Template Repository
 2. **Extract Semantic IDs** - Identifies all semantic IDs within the template that need values  
 3. **Request Data via Schema** - Sends a JSON Schema to the Plugin API describing the structure and semantic IDs needed  
 4. **Receive Values** - Plugin queries its database and responds with populated values for the requested semantic IDs  

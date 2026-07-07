@@ -4,18 +4,20 @@ using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Providers;
 using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.Infrastructure.Http.Clients;
-using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Config;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
 using Microsoft.Extensions.Options;
+
+using UnauthorizedAccessException = AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure.UnauthorizedAccessException;
 
 namespace AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Services;
 
 public class PluginManifestProvider(ILogger<PluginManifestProvider> logger,
-                                    IOptions<PluginConfig> plugins,
+                                    IOptions<PluginsConfig> pluginsConfig,
                                     ICreateClient clientFactory) : IPluginManifestProvider
 {
     private const string ManifestEndpoint = "manifest";
-    private readonly List<Plugin> _plugins = plugins.Value.Plugins;
+    private readonly IList<ServiceInstance> _plugins = pluginsConfig.Value.Instances;
 
     public async Task<IList<PluginManifest>> GetAllPluginManifestsAsync(CancellationToken cancellationToken)
     {
@@ -24,7 +26,7 @@ public class PluginManifestProvider(ILogger<PluginManifestProvider> logger,
 
         foreach (var plugin in _plugins)
         {
-            using var httpClient = CreateClient($"{PluginConfig.HttpClientNamePrefix}{plugin.PluginName}");
+            using var httpClient = CreateClient($"{HttpClientNames.PluginDataProviderPrefix}{plugin.Name}");
             try
             {
                 var response = await httpClient.GetAsync(relativeUri, cancellationToken).ConfigureAwait(false);
@@ -33,8 +35,8 @@ public class PluginManifestProvider(ILogger<PluginManifestProvider> logger,
                 var content = await ProcessResponseAsync(response, ManifestEndpoint, cancellationToken).ConfigureAwait(false);
                 var manifestEntity = DeserializeManifest(content);
 
-                manifestEntity.PluginName = plugin.PluginName;
-                manifestEntity.PluginUrl = plugin.PluginUrl;
+                manifestEntity.PluginName = plugin.Name;
+                manifestEntity.PluginUrl = plugin.BaseUrl;
 
                 manifests.Add(manifestEntity);
             }
@@ -84,7 +86,7 @@ public class PluginManifestProvider(ILogger<PluginManifestProvider> logger,
             case System.Net.HttpStatusCode.Unauthorized:
             case System.Net.HttpStatusCode.Forbidden:
                 logger.LogError("Unauthorized access. Endpoint: {Url}", url);
-                throw new ServiceAuthorizationException();
+                throw new UnauthorizedAccessException();
 
             default:
                 logger.LogError("Invalid response format. Endpoint: {Url}", url);

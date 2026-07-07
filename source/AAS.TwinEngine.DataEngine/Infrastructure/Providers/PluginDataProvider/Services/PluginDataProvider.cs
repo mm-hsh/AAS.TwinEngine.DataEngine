@@ -5,9 +5,11 @@ using AAS.TwinEngine.DataEngine.ApplicationLogic.Extensions;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Providers;
 using AAS.TwinEngine.DataEngine.DomainModel.Plugin;
 using AAS.TwinEngine.DataEngine.Infrastructure.Http.Clients;
-using AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Config;
+using AAS.TwinEngine.DataEngine.ServiceConfiguration.Config;
 
 using Microsoft.AspNetCore.WebUtilities;
+
+using UnauthorizedAccessException = AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure.UnauthorizedAccessException;
 
 namespace AAS.TwinEngine.DataEngine.Infrastructure.Providers.PluginDataProvider.Services;
 
@@ -98,6 +100,50 @@ public class PluginDataProvider(
     public Task<IList<HttpContent>> GetDataForAssetInformationByIdAsync(IList<PluginRequestMetaData> pluginRequests, CancellationToken cancellationToken)
         => GetAndProcessAsync(pluginRequests, AssetInformationEndpoint, cancellationToken);
 
+    public async Task<IList<HttpContent>> GetDataForShellDescriptorsByAssetIdsAsync(IList<PluginRequestMetaData> pluginRequests, string assetIdsHeaderValue, CancellationToken cancellationToken)
+    {
+        var result = new List<HttpContent>();
+        var exceptions = new List<Exception>();
+
+        foreach (var pluginRequest in pluginRequests)
+        {
+            var url = BuildUrl(ApiPaths.PluginMetadata, ShellsEndpoint);
+
+            if (pluginRequest == null)
+            {
+                logger.LogWarning("Plugin request is null. Skipping request to {Url}", url);
+                exceptions.Add(new ValidationFailedException());
+                continue;
+            }
+
+            using var httpClient = CreateClient(pluginRequest.HttpClientName);
+
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                _ = request.Headers.TryAddWithoutValidation("aastwinengine-assetids", assetIdsHeaderValue);
+
+                var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    logger.LogInformation("Successful response from {Url} with status: {StatusCode}", url, response.StatusCode);
+                    result.Add(response.Content);
+                    continue;
+                }
+
+                exceptions.Add(HandleFailureResponse(response.StatusCode));
+            }
+            catch (TaskCanceledException ex)
+            {
+                logger.LogError(ex, "Request timed out. Endpoint: {Url}", url);
+                exceptions.Add(new RequestTimeoutException());
+            }
+        }
+
+        return HandleResultOrThrow(result, exceptions);
+    }
+
     private async Task<HttpContent> ProcessResponseAsync(HttpResponseMessage response, string url, CancellationToken cancellationToken)
     {
         logger.LogInformation("HTTP request to {Url}", url);
@@ -120,7 +166,7 @@ public class PluginDataProvider(
             case System.Net.HttpStatusCode.Unauthorized:
             case System.Net.HttpStatusCode.Forbidden:
                 logger.LogError("Unauthorized access. Endpoint: {Url}", url);
-                throw new ServiceAuthorizationException();
+                throw new UnauthorizedAccessException();
 
             default:
                 logger.LogError("Invalid response format. Endpoint: {Url}", url);
@@ -135,7 +181,7 @@ public class PluginDataProvider(
 
         foreach (var pluginRequest in pluginRequests)
         {
-            var url = BuildUrl(PluginConfig.MetaData, path, pluginRequest.AasIdentifier.EncodeBase64Url());
+            var url = BuildUrl(ApiPaths.PluginMetadata, path, pluginRequest.AasIdentifier.EncodeBase64Url());
             var response = await SendPluginRequestAsync(pluginRequest, url, exceptions, cancellationToken);
             if (response == null)
             {
@@ -192,7 +238,7 @@ public class PluginDataProvider(
 
     private static string BuildShellsUrl(int? limit, string? cursor)
     {
-        const string BaseUrl = $"{PluginConfig.MetaData}/{ShellsEndpoint}";
+        const string BaseUrl = $"{ApiPaths.PluginMetadata}/{ShellsEndpoint}";
         var queryParams = new Dictionary<string, string>();
 
         if (limit is > 0)
@@ -214,7 +260,7 @@ public class PluginDataProvider(
         => statusCode switch
         {
             System.Net.HttpStatusCode.NotFound => new ResourceNotFoundException(),
-            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => new ServiceAuthorizationException(),
+            System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => new UnauthorizedAccessException(),
             _ => new ResponseParsingException()
         };
 
