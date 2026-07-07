@@ -5,6 +5,8 @@ using System.Text.Json.Nodes;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Base;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Exceptions.Infrastructure;
 using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Description;
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin;
+using AAS.TwinEngine.DataEngine.ApplicationLogic.Services.Plugin.Providers;
 using AAS.TwinEngine.DataEngine.DomainModel.Description;
 using AAS.TwinEngine.DataEngine.ModuleTests.Common;
 
@@ -20,17 +22,25 @@ public abstract class DescriptionControllerTests : IDisposable
     private readonly ConfigTestFactory _factory;
     private readonly IDescriptionService _mockDescriptionService;
     private readonly HttpClient _client;
+    private readonly IPluginManifestProvider _mockPluginManifestProvider;
+    private readonly IPluginManifestConflictHandler _mockPluginManifestConflictHandler;
 
     protected DescriptionControllerTests(string configDir)
     {
         _mockDescriptionService = Substitute.For<IDescriptionService>();
 
+        _mockPluginManifestProvider = Substitute.For<IPluginManifestProvider>();
+        _mockPluginManifestConflictHandler = Substitute.For<IPluginManifestConflictHandler>();
+
         _factory = new ConfigTestFactory(configDir, services =>
         {
             _ = services.AddSingleton(_mockDescriptionService);
+            _ =services.AddSingleton(_mockPluginManifestProvider);
+            _ = services.AddSingleton(_mockPluginManifestConflictHandler);
         });
 
         _client = _factory.CreateClient();
+        _ = _mockPluginManifestConflictHandler.Manifests.Returns([]);
     }
 
     public void Dispose()
